@@ -5,32 +5,25 @@
 // Only needed if you want real names in presence instead of anonymous ids.
 // The app works fine WITHOUT this (anonymous mode). Enable it later if time allows.
 
-export default async function handler(
-  req: Request & { query?: Record<string, string> },
-  res: {
-    status: (code: number) => { json: (body: unknown) => void };
-    json: (body: unknown) => void;
-  },
-) {
+export default async function handler(request: Request): Promise<Response> {
   const secretKey = process.env.PORTAL_SECRET;
   if (!secretKey) {
-    return res.status(500).json({ error: "PORTAL_SECRET not configured" });
+    return json({ error: "PORTAL_SECRET not configured" }, 500);
   }
-  if (req.method !== "POST") {
-    return res.status(405).json({ error: "Method not allowed" });
+  if (request.method !== "POST") {
+    return json({ error: "Method not allowed" }, 405);
   }
 
   let body: { userId?: string; name?: string } = {};
   try {
-    const raw = await new Response(req.body).text();
-    body = raw ? JSON.parse(raw) : {};
+    body = (await request.json()) as { userId?: string; name?: string };
   } catch {
     body = {};
   }
 
   const userId = typeof body.userId === "string" ? body.userId.slice(0, 64) : "";
   if (!userId) {
-    return res.status(400).json({ error: "userId is required" });
+    return json({ error: "userId is required" }, 400);
   }
 
   try {
@@ -47,12 +40,19 @@ export default async function handler(
     });
 
     if (!tokenRes.ok) {
-      return res.status(tokenRes.status).json({ error: `Portal token API ${tokenRes.status}` });
+      return json({ error: `Portal token API ${tokenRes.status}` }, tokenRes.status);
     }
     const data = (await tokenRes.json()) as { token?: string };
-    return res.status(200).json({ token: data.token });
+    return json({ token: data.token });
   } catch (err) {
     console.error("portal-token failed:", err);
-    return res.status(500).json({ error: "Failed to mint token" });
+    return json({ error: "Failed to mint token" }, 500);
   }
+}
+
+function json(body: unknown, status = 200): Response {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { "Content-Type": "application/json" },
+  });
 }
