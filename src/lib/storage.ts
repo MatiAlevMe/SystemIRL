@@ -1,6 +1,7 @@
 import { get, set } from "idb-keyval";
 import type { PlayerState, Quest } from "../types";
 import { todayKey, yesterdayKey, levelFromXp } from "./xp";
+import { itemById } from "./catalog";
 
 const PLAYER_KEY = "player";
 const QUEST_CACHE = "quests:";
@@ -80,12 +81,16 @@ export async function completeQuest(p: PlayerState, quest: Quest): Promise<Compl
   const now = new Date();
   const today = todayKey(now);
 
+  // Bono de XP del arma equipada (si tiene xpPct).
+  const weapon = itemById(p.weapon);
+  const xpGain = Math.round(quest.xp * (1 + (weapon?.bonus?.xpPct ?? 0)));
+
   const stats: PlayerState["stats"] = {
     ...p.stats,
-    [quest.category]: p.stats[quest.category] + quest.xp,
+    [quest.category]: p.stats[quest.category] + xpGain,
   };
 
-  const xp = p.xp + quest.xp;
+  const xp = p.xp + xpGain;
   const history = [...p.history, quest.title].slice(-20);
 
   const next: PlayerState = {
@@ -99,7 +104,7 @@ export async function completeQuest(p: PlayerState, quest: Quest): Promise<Compl
 
   await savePlayer(next);
   const level = levelFromXp(xp);
-  return result(next, prevLevel, quest.xp, level);
+  return result(next, prevLevel, xpGain, level);
 }
 
 // God mode: otorga XP sin quest real (solo para la demo / pruebas).

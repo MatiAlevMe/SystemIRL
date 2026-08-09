@@ -7,6 +7,7 @@ import PartyPanel from "./components/PartyPanel";
 import LevelUpModal from "./components/LevelUpModal";
 import CombatModal from "./components/CombatModal";
 import DemoPanel from "./components/DemoPanel";
+import ShopPanel from "./components/ShopPanel";
 import { portalClient } from "./portal";
 import {
   clearDoneToday,
@@ -22,6 +23,7 @@ import { fetchDailyQuests } from "./lib/quests";
 import { todayKey, xpForLevel, xpProgress } from "./lib/xp";
 import { botManager } from "./lib/bots";
 import { resolveCombat, type CombatResult } from "./lib/rpg";
+import { itemById, type ShopItem } from "./lib/catalog";
 import { weekRaid } from "./lib/raids";
 import type { PartyMessage, PlayerState, Quest } from "./types";
 
@@ -58,7 +60,7 @@ export default function App() {
   const [doneIds, setDoneIds] = useState<Set<string>>(new Set());
   const [completing, setCompleting] = useState(false);
   const [partyCode, setPartyCodeState] = useState<string>(() => localStorage.getItem("partyCode") ?? "");
-  const [tab, setTab] = useState<"daily" | "party">("daily");
+  const [tab, setTab] = useState<"daily" | "party" | "shop">("daily");
   const [levelUp, setLevelUp] = useState<{ level: number } | null>(null);
   const [raidClaimed, setRaidClaimed] = useState(false);
   const [demoSource, setDemoSource] = useState<string | null>(null);
@@ -278,6 +280,36 @@ export default function App() {
     setDemoSource(source);
   }, []);
 
+  const handleBuy = useCallback(
+    (item: ShopItem) => {
+      if (!player || player.coins < item.price || player.owned.includes(item.id)) return;
+      const next: PlayerState = {
+        ...player,
+        coins: player.coins - item.price,
+        owned: [...player.owned, item.id],
+      };
+      if (item.kind === "title") next.title = item.id;
+      else if (item.kind === "color") next.color = item.id;
+      else if (item.kind === "weapon") next.weapon = item.id;
+      setPlayer(next);
+      void savePlayer(next);
+    },
+    [player],
+  );
+
+  const handleEquip = useCallback(
+    (item: ShopItem) => {
+      if (!player || !player.owned.includes(item.id)) return;
+      const next: PlayerState = { ...player };
+      if (item.kind === "title") next.title = item.id;
+      else if (item.kind === "color") next.color = item.id;
+      else if (item.kind === "weapon") next.weapon = item.id;
+      setPlayer(next);
+      void savePlayer(next);
+    },
+    [player],
+  );
+
   // Pantalla de configuración si falta la publishable key.
   if (!portalClient) {
     return (
@@ -313,7 +345,10 @@ export default function App() {
         </div>
 
         <div className="player-chip">
-          <div className="player-name">{player.name}</div>
+          <div className="player-name" style={{ color: itemById(player.color)?.color ?? undefined }}>
+            {player.title ? `${itemById(player.title)?.name ?? player.title} — ` : ""}
+            {player.name}
+          </div>
           <div className="level-badge">Nv {progress.level}</div>
           <div className="xp-track">
             <div className="xp-fill" style={{ width: `${Math.round(progress.ratio * 100)}%` }} />
@@ -341,6 +376,9 @@ export default function App() {
         <button className={tab === "party" ? "active" : ""} onClick={() => setTab("party")}>
           Party{partyCode ? ` · ${partyCode}` : ""}
         </button>
+        <button className={tab === "shop" ? "active" : ""} onClick={() => setTab("shop")}>
+          Shop
+        </button>
       </nav>
 
       <main>
@@ -356,6 +394,8 @@ export default function App() {
               source={demoSource ?? questSource}
             />
           </>
+        ) : tab === "shop" ? (
+          <ShopPanel player={player} onBuy={handleBuy} onEquip={handleEquip} />
         ) : (
           <PartyPanel
             partyCode={partyCode}

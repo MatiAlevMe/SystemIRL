@@ -1137,3 +1137,113 @@ button {
   margin-right: 5px;
   accent-color: #4f7cff;
 }
+
+/* ---------- Shop ---------- */
+.shop-section {
+  margin-bottom: 22px;
+}
+
+.shop-section h3 {
+  font-size: 13px;
+  letter-spacing: 0.14em;
+  color: #5f6a82;
+  text-transform: uppercase;
+  margin-bottom: 10px;
+}
+
+.shop-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+  gap: 12px;
+}
+
+.shop-item {
+  display: flex;
+  flex-direction: column;
+  padding: 14px 16px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.shop-item.owned { border-color: rgba(61, 218, 215, 0.3); }
+.shop-item.equipped { border-color: rgba(255, 209, 102, 0.5); }
+
+.shop-item-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.shop-item-name {
+  font-size: 14px;
+  font-weight: 700;
+  color: #e8ecf6;
+}
+
+.shop-swatch {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+}
+
+.shop-item-desc {
+  margin: 6px 0 4px;
+  font-size: 12px;
+  color: #8b95ad;
+  line-height: 1.4;
+}
+
+.shop-item-bonus {
+  font-size: 11px;
+  color: #3ddad7;
+  font-weight: 600;
+}
+
+.shop-item-bottom {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 10px;
+}
+
+.shop-item-price {
+  font-size: 13px;
+  color: #ffd166;
+  font-weight: 700;
+}
+
+.shop-btn {
+  padding: 5px 12px;
+  border-radius: 8px;
+  border: 1px solid rgba(61, 218, 215, 0.5);
+  background: rgba(61, 218, 215, 0.12);
+  color: #3ddad7;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.shop-btn:hover:not(:disabled) {
+  background: rgba(61, 218, 215, 0.22);
+}
+
+.shop-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.shop-btn.equipped {
+  border-color: rgba(255, 209, 102, 0.5);
+  background: rgba(255, 209, 102, 0.1);
+  color: #ffd166;
+  cursor: default;
+}
+
+.shop-btn.equip {
+  border-color: rgba(79, 124, 255, 0.5);
+  background: rgba(79, 124, 255, 0.12);
+  color: #b9c5ff;
+}

@@ -19,6 +19,8 @@ interface Props {
 interface BoardRow {
   id: string;
   name: string;
+  title?: string;
+  color?: string;
   level: number;
   xp: number;
 }
@@ -44,6 +46,8 @@ export default function PartyPanel({
       .map((p) => ({
         id: p.id,
         name: String(p.metadata!.name),
+        title: typeof p.metadata?.title === "string" ? p.metadata.title : undefined,
+        color: typeof p.metadata?.color === "string" ? p.metadata.color : undefined,
         level: Number(p.metadata?.level ?? 1),
         xp: Number(p.metadata?.xp ?? 0),
       }))
@@ -126,7 +130,8 @@ export default function PartyPanel({
                   {board.map((r, i) => (
                     <li key={r.id} className={r.id === meId ? "me" : ""}>
                       <span className="rank">{i + 1}</span>
-                      <span className="b-name">
+                      <span className="b-name" style={{ color: r.color ?? undefined }}>
+                        {r.title ? `${r.title} — ` : ""}
                         {r.name}
                         {r.id === meId && <em>(tú)</em>}
                       </span>
