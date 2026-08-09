@@ -85,7 +85,7 @@ ZEN_API_KEY=...               # (opcional) OpenCode Zen free (big-pickle, deepse
    npm run portal:deploy   # npx @portalsdk/cli deploy
    ```
 
-**URL live:** https://systemirl.vercel.app
+**URL live:** https://system-irl.vercel.app
 
 ## 📁 Estructura
 
@@ -111,5 +111,5 @@ ZEN_API_KEY=...               # (opcional) OpenCode Zen free (big-pickle, deepse
 ## 🔗 Enlaces
 
 - Repo: https://github.com/MatiAlevMe/SystemIRL
-- Live: https://systemirl.vercel.app
+- Live: https://system-irl.vercel.app
 - Hackathon: [The Realtime Hackathon by Portal](https://hack.useportal.co)
