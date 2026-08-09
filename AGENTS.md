@@ -65,9 +65,13 @@ El canónico con comentarios es `.env.template`.
 3. **Mensajes** `done`/`levelup`/`join`/`raid` → feed de actividad en vivo.
 4. **Sin infra propia**: el realtime, presencia, historial y orden los maneja Portal; el "backend" son 2 serverless de Vercel.
 
-## Estado actual
-- MVP live y verificado en producción (quests IA, portal-token, canales party desplegados).
-- **Post-MVP (sprint demo)**: God Mode con bots (URL `#demo`), 5 quests/día, toasts de feed, sonido WebAudio. `PlayerState` se normaliza al cargar (`normalizePlayer` en `src/lib/storage.ts`): los datos viejos de IndexedDB nunca rompen.
-- **Fase 1 — combate táctico** (`src/lib/rpg.ts`): motor por turnos puro (atacar/hechizo/defender/ítem/EX/huir), debilidades ocultas por raza (ONE MORE), MP con regen, gauge EX y evolución por clase; `BattleModal.tsx` reemplaza a `CombatModal.tsx`; pestaña **Personaje** (`CharacterPanel.tsx`) con stats derivadas; raid semanal = jefe con HP compartido vía mensajes `raidHit` (mensajes = estado) y recompensa aura solo contribuyentes; shop ampliado (armaduras/reliquias/pociones/auras) con inventario.
-- **Fase 2 — personalización** (`src/lib/prefs.ts`): 8 intereses (chips 2-3) en el onboarding que viajan al prompt de `/api/quests` (+ guardrail de seguridad); botón **Regenerar** (2/día, contador por fecha) y **Bajar rango** (`rankEasy` → `rankBias -1`; reliquia de la Ambición lo sube). God mode suma **autopilot** de quests, **revelar debilidades** y **forzar rango**.
+- **Post-MVP (Refinamientos & Endgame)**:
+  - **Fase 1 (Agilidad y Turnos)**: Motor por turnos ATB-lite basado en `agility`, tope de velocidad de bosses (1.4×) y equipamiento de Botas.
+  - **Fase 2 (EX 99 & Raid Skill)**: Escalado de habilidad EX hasta nivel 99 e hitos pasivos (10/25/50/75/99). Sistema de Raid Skills (L1-LMAX/Suprema) por clase.
+  - **Fase 3 (Pociones % & Títulos)**: Pociones de restauración porcentual en combate y títulos equipables con pasivas de XP, oro, ataque y defensa.
+  - **Fase 4 (Torre Procedural)**: Torre de 100+ pisos generados procedimentalmente con escalado infinito y recompensas acumulativas.
+  - **Fase 5 (Elementos & Gemas)**: Hechizos filtrados por elementos desbloqueados mediante Gemas Elementales en la tienda.
+  - **Fase 6 (Raid Semanal ISO)**: Ciclo semanal atado a la semana calendario ISO (lunes-domingo). Botón de combate deshabilitado tras la derrota del jefe y meta diaria con daño pasivo porcentual acotado por tier.
+  - **Fase 7 (Quests 6/día)**: Grilla de 6 quests diarias y regeneración que preserva únicamente las quests no completadas.
+  - **Fase 8 (Arena de Entrenamiento)**: Pestaña de Arena para duelos 1v1 (2 energía/día) y Torneo de 16 gladiadores (1 energía/día).
 - Detalles y próximos pasos en `docs/ROADMAP.md`.

@@ -32,6 +32,7 @@
 | 6. Entregables (README, pitch, video, formulario) | 🔜 | docs listas, falta video + formulario |
 | 7. Post-MVP: God Mode + bots, 5 quests, toasts, raid grupal, combate, shop, torre, sonido | ✅ | commits `feat(demo/quests/party/rpg/shop/tower/ux)` |
 | 8. Post-MVP v2: combate táctico por turnos, clases/EX/evolución, Personaje, raid boss con HP compartido, shop ampliado, prefs (intereses, regenerar, rango) | ✅ | commits `feat(rpg)` + `feat(prefs)` |
+| 9. Refinamientos & Endgame v3: Fases 1–9 completadas (agilidad, turn order ATB-lite, EX 99, Raid Skills, Torre procedural 100+, elementos/gemas, ciclo semanal ISO de raids con deshabilitación tras victoria, daño porcentual de meta diaria, 6 quests/día y Arena 1v1/Torneo) | ✅ | commits `feat(rpg/catalog/tower/elements/raid/arena)` |
 
 ## Pasos manuales que debes hacer tú
 
