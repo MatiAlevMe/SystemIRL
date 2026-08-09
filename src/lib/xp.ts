@@ -14,6 +14,18 @@ export function levelFromXp(xp: number): number {
   return level;
 }
 
+export function exLevelFor(exXp: number): number {
+  let lvl = 1;
+  let req = 40;
+  let accum = 0;
+  while (lvl < 99 && exXp >= accum + req) {
+    accum += req;
+    lvl++;
+    req = Math.floor(40 + lvl * 2);
+  }
+  return lvl;
+}
+
 export interface XpProgress {
   level: number;
   current: number;

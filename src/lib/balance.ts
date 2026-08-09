@@ -100,3 +100,45 @@ export const RAID_DROP_RATES_BASE: Record<number | string, number> = {
   "MAX-Solo": 0.70,
   "MAX-Party": 0.55,
 };
+
+export interface RaidSkillDef {
+  name: string;
+  passiveDesc: string;
+  activeName: string;
+  activeDesc: string;
+}
+
+export const RAID_SKILLS: Record<PlayerClass, RaidSkillDef> = {
+  guerrero: {
+    name: "Sangre del Monarca",
+    passiveDesc: "+4% de daño vs jefes global por nivel.",
+    activeName: "Filo del Monarca",
+    activeDesc: "Próximo ataque vs jefe +50% daño (+10%/nivel).",
+  },
+  guardia: {
+    name: "Baluarte de la Colmena",
+    passiveDesc: "-4% de daño recibido global por nivel.",
+    activeName: "Muro Irrompible",
+    activeDesc: "Reducción del 50% de daño a toda la party este turno.",
+  },
+  sabio: {
+    name: "Gracia del Sistema",
+    passiveDesc: "+4% a la eficacia de curación global por nivel.",
+    activeName: "Absolución",
+    activeDesc: "Sanación masiva e inmune a debilidades 1 turno.",
+  },
+  cazador: {
+    name: "Instinto del Cazador",
+    passiveDesc: "+4% de crítico vs jefes global por nivel.",
+    activeName: "Tiro de Sombra",
+    activeDesc: "Disparo crítico garantizado que ignora 50% de defensa.",
+  },
+};
+
+export function exMilestoneBonus(exLevel: number): { regenPct: number; crit: number; hpPct: number } {
+  return {
+    regenPct: exLevel >= 10 ? 0.10 : 0,
+    crit: exLevel >= 25 ? 0.05 : 0,
+    hpPct: exLevel >= 75 ? 0.05 : 0,
+  };
+}
