@@ -580,19 +580,25 @@ function useItem(s: BattleState, p: Member, itemId: string): void {
   s.usedItems.push(item.id);
   const b = item.bonus ?? {};
   const parts: string[] = [];
-  if (b.hp) {
-    const amount = Math.min(Math.round(b.hp), p.maxHp - p.hp);
+  if (b.hpPct || b.hp) {
+    const rawPct = b.hpPct ?? 0;
+    const rawVal = b.hp ?? 0;
+    const targetVal = rawPct > 0 ? Math.round(p.maxHp * rawPct) : rawVal;
+    const amount = Math.min(targetVal, p.maxHp - p.hp);
     p.hp += amount;
     parts.push(`+${amount} HP`);
   }
-  if (b.mp) {
-    const amount = Math.min(Math.round(b.mp), p.maxMp - p.mp);
+  if (b.mpPct || b.mp) {
+    const rawPct = b.mpPct ?? 0;
+    const rawVal = b.mp ?? 0;
+    const targetVal = rawPct > 0 ? Math.round(p.maxMp * rawPct) : rawVal;
+    const amount = Math.min(targetVal, p.maxMp - p.mp);
     p.mp += amount;
     parts.push(`+${amount} MP`);
   }
   if (b.ex) {
     p.gauge = Math.min(100, p.gauge + Math.round(b.ex));
-    parts.push(`EX +${b.ex}`);
+    parts.push(`EX +${b.ex}%`);
   }
   pushLog(s, "heal", `${p.name} usó ${item.name} (${parts.join(" · ")})`);
 }

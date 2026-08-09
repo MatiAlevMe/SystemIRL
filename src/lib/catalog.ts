@@ -31,10 +31,10 @@ export interface ShopItem {
 }
 
 export const TITLES: ShopItem[] = [
-  { id: "t-despertar", name: "El Despertar", kind: "title", price: 200, desc: "El primer título del Sistema." },
-  { id: "t-cazador", name: "Cazador de Niveles", kind: "title", price: 500, desc: "Subes de nivel a diario." },
-  { id: "t-herrero", name: "Herrero de Sombras", kind: "title", price: 900, desc: "Forja tu propio camino." },
-  { id: "t-monarca", name: "Monarca de la Torre", kind: "title", price: 1500, desc: "Solo los que escalan lo logran." },
+  { id: "t-despertar", name: "El Despertar", kind: "title", price: 200, desc: "+3% XP ganada por quest.", bonus: { xpPct: 0.03 } },
+  { id: "t-cazador", name: "Cazador de Niveles", kind: "title", price: 500, desc: "+5% de oro ganado.", bonus: { coinPct: 0.05 } },
+  { id: "t-herrero", name: "Herrero de Sombras", kind: "title", price: 900, desc: "+5% de defensa.", bonus: { defPct: 0.05 } },
+  { id: "t-monarca", name: "Monarca de la Torre", kind: "title", price: 1500, desc: "+10% de ataque.", bonus: { atkPct: 0.10 } },
 ];
 
 export const COLORS: ShopItem[] = [
@@ -76,10 +76,10 @@ export const TRINKETS: ShopItem[] = [
 ];
 
 export const POTIONS: ShopItem[] = [
-  { id: "p-pocion", name: "Poción Menor", kind: "potion", price: 90, desc: "Restaura 30 HP en combate.", bonus: { hp: 30 } },
-  { id: "p-eter", name: "Éter", kind: "potion", price: 100, desc: "Restaura 15 MP en combate.", bonus: { mp: 15 } },
-  { id: "p-elixir", name: "Elixir EX", kind: "potion", price: 140, desc: "Carga 50 del gauge EX.", bonus: { ex: 50 } },
-  { id: "p-mayor", name: "Poción Mayor", kind: "potion", price: 240, desc: "Restaura 80 HP en combate.", bonus: { hp: 80 } },
+  { id: "p-pocion", name: "Poción Menor", kind: "potion", price: 90, desc: "Restaura 30% HP en combate.", bonus: { hpPct: 0.30 } },
+  { id: "p-eter", name: "Éter", kind: "potion", price: 100, desc: "Restaura 30% MP en combate.", bonus: { mpPct: 0.30 } },
+  { id: "p-elixir", name: "Elixir EX", kind: "potion", price: 140, desc: "Carga 50% del gauge EX.", bonus: { ex: 50 } },
+  { id: "p-mayor", name: "Poción Mayor", kind: "potion", price: 240, desc: "Restaura 60% HP en combate.", bonus: { hpPct: 0.60 } },
 ];
 
 // Auras pasivas: recompensas exclusivas del raid (no se compran).
