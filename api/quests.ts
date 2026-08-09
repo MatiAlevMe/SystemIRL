@@ -63,10 +63,32 @@ function json(body: unknown, status = 200): Response {
   });
 }
 
-const MODEL = process.env.GEMINI_MODEL || "gemini-2.0-flash";
+// Free-tier models ordered by freshness. gemini-2.0-flash is retired from the
+// free tier (limit 0), so we try newer flash models first. GEMINI_MODEL overrides
+// and goes first (we still fall back if it fails).
+const MODELS = process.env.GEMINI_MODEL
+  ? [process.env.GEMINI_MODEL, "gemini-3.6-flash", "gemini-2.5-flash"]
+  : ["gemini-3.6-flash", "gemini-2.5-flash", "gemini-2.0-flash"];
 
 async function generateWithGemini(
   apiKey: string,
+  opts: { history: string[]; playerLevel: number; streak: number; count: number },
+): Promise<Quest[] | null> {
+  const { history, playerLevel, streak, count } = opts;
+  for (const model of MODELS) {
+    try {
+      const quests = await generateWithModel(apiKey, model, { history, playerLevel, streak, count });
+      if (quests && quests.length > 0) return quests;
+    } catch (err) {
+      console.error(`Gemini ${model} failed:`, err);
+    }
+  }
+  return null;
+}
+
+async function generateWithModel(
+  apiKey: string,
+  model: string,
   opts: { history: string[]; playerLevel: number; streak: number; count: number },
 ): Promise<Quest[] | null> {
   const { history, playerLevel, streak, count } = opts;
@@ -88,7 +110,7 @@ async function generateWithGemini(
   ].join("\n");
 
   const res = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent?key=${apiKey}`,
+    `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },
