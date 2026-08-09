@@ -20,23 +20,10 @@ import {
 import { fetchDailyQuests } from "./lib/quests";
 import { todayKey, xpForLevel, xpProgress } from "./lib/xp";
 import { botManager } from "./lib/bots";
-import type { PartyMessage, PlayerState, Quest } from "./types";
+import { weekRaid } from "./lib/raids";import type { PartyMessage, PlayerState, Quest } from "./types";
 
-const WEEKLY_RAIDS = [
-  "Corran 5 km en equipo",
-  "100 flexiones grupales",
-  "Un día sin azúcar (los dos)",
-  "10.000 pasos cada uno",
-  "1 hora de estudio profundo",
-  "Presupuesto estricto: $15 máx",
-  "Entrenen en pareja",
-];
-
-function weekRaid(now = new Date()): string {
-  const start = new Date(now.getFullYear(), 0, 1);
-  const days = Math.floor((now.getTime() - start.getTime()) / 86400000);
-  const week = Math.floor(days / 7) % WEEKLY_RAIDS.length;
-  return WEEKLY_RAIDS[week];
+function weekRaidKey(): string {
+  return "raid:" + weekRaid();
 }
 
 const TOAST_ICON: Record<string, string> = {
@@ -122,7 +109,7 @@ export default function App() {
   }, [loadQuests]);
 
   useEffect(() => {
-    const key = "raid:" + weekRaid();
+    const key = weekRaidKey();
     setRaidClaimed(localStorage.getItem(key) === "1");
   }, []);
 
@@ -212,7 +199,7 @@ export default function App() {
 
   const handleClaimRaid = useCallback(() => {
     if (!player || !partyCode || raidClaimed) return;
-    localStorage.setItem("raid:" + weekRaid(), "1");
+    localStorage.setItem(weekRaidKey(), "1");
     setRaidClaimed(true);
     void party.send({ content: { kind: "raid", name: player.name, raid: weekRaid() } });
   }, [player, partyCode, raidClaimed]);
@@ -390,6 +377,7 @@ export default function App() {
           playerName={player.name}
           partyCode={partyCode}
           botCount={botManager.count}
+          raid={weekRaid()}
           onGrantXp={handleGrantXp}
           onForceLevelUp={handleForceLevelUp}
           onGrantCoins={handleGrantCoins}

@@ -5,6 +5,7 @@ interface Props {
   playerName: string;
   partyCode: string;
   botCount: number;
+  raid: string;
   onGrantXp: (amount: number) => void;
   onForceLevelUp: () => void;
   onGrantCoins: (amount: number) => void;
@@ -22,6 +23,7 @@ export default function DemoPanel({
   playerName,
   partyCode,
   botCount,
+  raid,
   onGrantXp,
   onForceLevelUp,
   onGrantCoins,
@@ -80,7 +82,7 @@ export default function DemoPanel({
             <button
               className="demo-btn"
               disabled={!firstBot()}
-              onClick={() => firstBot() && botManager.raid(firstBot())}
+              onClick={() => firstBot() && botManager.raid(firstBot(), raid)}
             >
               Bot raid
             </button>

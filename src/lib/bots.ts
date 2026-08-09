@@ -90,8 +90,8 @@ class BotManager {
     this.act(name, { kind: "levelup", name, level, xp });
   }
 
-  raid(name: string): void {
-    this.act(name, { kind: "raid", name, raid: BOT_RAIDS[Math.floor(Math.random() * BOT_RAIDS.length)] });
+  raid(name: string, raid?: string): void {
+    this.act(name, { kind: "raid", name, raid: raid ?? BOT_RAIDS[Math.floor(Math.random() * BOT_RAIDS.length)] });
   }
 
   clear(): void {

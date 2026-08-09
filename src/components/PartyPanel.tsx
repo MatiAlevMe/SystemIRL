@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import type { AggregatePresence, ChannelStatus, DetailedPresence, Message } from "@portalsdk/core";
 import type { PartyMessage } from "../types";
+import { RAID_TARGET } from "../lib/raids";
 
 interface Props {
   partyCode: string;
@@ -63,6 +64,17 @@ export default function PartyPanel({
   );
 
   const onlineCount = presence ? presence.count : 0;
+
+  const raidProgress = useMemo(() => {
+    const raiders = new Set<string>();
+    for (const m of messages) {
+      const c = m.content as { kind?: unknown; name?: unknown; raid?: unknown } | null;
+      if (c && c.kind === "raid" && c.raid === raid && typeof c.name === "string") raiders.add(c.name);
+    }
+    return raiders.size;
+  }, [messages, raid]);
+
+  const raidPct = Math.min(100, Math.round((raidProgress / RAID_TARGET) * 100));
 
   return (
     <section className="party">
@@ -176,6 +188,14 @@ export default function PartyPanel({
                 <div className="raid-icon">⌁</div>
                 <div className="raid-title">{raid}</div>
                 <p>Objetivo grupal. Un jugador completa la raid y toda la party lo ve en tiempo real.</p>
+                <div className="raid-progress">
+                  <div className="raid-progress-bar">
+                    <div className="raid-progress-fill" style={{ width: `${raidPct}%` }} />
+                  </div>
+                  <span className="raid-progress-label">
+                    {raidProgress}/{RAID_TARGET} jugadores
+                  </span>
+                </div>
                 <button className="primary-btn" disabled={raidClaimed} onClick={onClaimRaid}>
                   {raidClaimed ? "✓ Raid completada" : "Completar raid"}
                 </button>
