@@ -23,21 +23,14 @@ interface QuestsBody {
   count?: number;
 }
 
-export default async function handler(
-  req: Request & { query?: Record<string, string> },
-  res: {
-    status: (code: number) => { json: (body: unknown) => void };
-    json: (body: unknown) => void;
-  },
-) {
-  if (req.method !== "POST") {
-    return res.status(405).json({ error: "Method not allowed" });
+export default async function handler(request: Request): Promise<Response> {
+  if (request.method !== "POST") {
+    return json({ error: "Method not allowed" }, 405);
   }
 
   let body: QuestsBody = {};
   try {
-    const raw = await new Response(req.body).text();
-    body = raw ? JSON.parse(raw) : {};
+    body = (await request.json()) as QuestsBody;
   } catch {
     body = {};
   }
@@ -53,14 +46,21 @@ export default async function handler(
     try {
       const quests = await generateWithGemini(apiKey, { history, playerLevel, streak, count });
       if (quests && quests.length > 0) {
-        return res.status(200).json({ source: "gemini", quests });
+        return json({ source: "gemini", quests });
       }
     } catch (err) {
       console.error("Gemini failed, falling back to canned pool:", err);
     }
   }
 
-  return res.status(200).json({ source: "fallback", quests: fallbackQuests({ playerLevel, streak, count }) });
+  return json({ source: "fallback", quests: fallbackQuests({ playerLevel, streak, count }) });
+}
+
+function json(body: unknown, status = 200): Response {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { "Content-Type": "application/json" },
+  });
 }
 
 const MODEL = process.env.GEMINI_MODEL || "gemini-2.0-flash";
