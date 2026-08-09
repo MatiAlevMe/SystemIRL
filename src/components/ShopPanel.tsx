@@ -2,7 +2,10 @@ import { useState } from "react";
 import { CLASS_ICON, CLASS_LABEL, type PlayerClass, type PlayerState } from "../types";
 import {
   ARMOR_ITEMS,
+  BOOTS_ITEMS,
   COLORS,
+  GEM_ITEMS,
+  LENS_ITEM,
   MUSIC_ITEMS,
   POTIONS,
   RAID_AURAS,
@@ -30,6 +33,7 @@ function equippedId(player: PlayerState, kind: ShopItem["kind"]): string | null 
   if (kind === "armor") return player.armor;
   if (kind === "trinket") return player.trinket;
   if (kind === "aura") return player.aura;
+  if (kind === "boots") return player.boots ?? null;
   return null;
 }
 
@@ -46,7 +50,8 @@ function ItemCard({
 }) {
   const owned = player.owned.includes(item.id) || (item.kind === "music" && player.music);
   const count = player.inventory[item.id] ?? 0;
-  const equipped = equippedId(player, item.kind) === item.id;
+  const isUnlock = item.kind === "gem" || item.kind === "lens";
+  const equipped = isUnlock ? owned : equippedId(player, item.kind) === item.id;
   const affordable = player.coins >= item.price;
 
   return (
@@ -90,7 +95,9 @@ function ItemCard({
             {affordable ? "Comprar" : "Sin oro"}
           </button>
         ) : equipped ? (
-          <span className="shop-btn equipped">✓ Equipado</span>
+          <span className="shop-btn equipped">
+            ✓ {item.kind === "gem" ? "Desbloqueada" : item.kind === "lens" ? "Adquirida" : "Equipado"}
+          </span>
         ) : (
           <button className="shop-btn equip" onClick={() => onEquip(item)}>
             Equipar
@@ -112,8 +119,11 @@ export default function ShopPanel({ player, onBuy, onEquip, onChangeClass }: Pro
     { label: "Armas", items: WEAPON_ITEMS },
     { label: "Armaduras", items: ARMOR_ITEMS },
     { label: "Reliquias", items: TRINKETS },
+    { label: "Botas", items: BOOTS_ITEMS },
     { label: "Pociones", items: POTIONS },
+    { label: "Gemas (elementos)", items: GEM_ITEMS },
     { label: "Música", items: MUSIC_ITEMS },
+    { label: "Utilidades", items: [LENS_ITEM] },
     { label: "Auras de raid", items: RAID_AURAS },
   ];
 

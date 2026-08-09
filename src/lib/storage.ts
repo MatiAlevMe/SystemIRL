@@ -117,16 +117,27 @@ export async function completeQuest(p: PlayerState, quest: Quest): Promise<Compl
   const now = new Date();
   const today = todayKey(now);
 
-  // Bono de XP del arma equipada (si tiene xpPct).
+  // Bono de XP del arma equipada (si tiene xpPct) + título equipado.
   const weapon = itemById(p.weapon);
-  const xpGain = Math.round(quest.xp * (1 + (weapon?.bonus?.xpPct ?? 0)));
+  const title = itemById(p.title);
+  const xpGain = Math.round(quest.xp * (1 + (weapon?.bonus?.xpPct ?? 0) + (title?.bonus?.xpPct ?? 0)));
 
+  // Stats crecen +1 por quest completada de esa categoría (antes sumaban el XP completo).
   const stats: PlayerState["stats"] = {
     ...p.stats,
-    [quest.category]: p.stats[quest.category] + xpGain,
+    [quest.category]: p.stats[quest.category] + 1,
   };
 
   const xp = p.xp + xpGain;
+  const level = levelFromXp(xp);
+
+  // Al subir de nivel, la stat principal de la clase sube +1 (guerrero/cazador fuerza,
+  // sabio inteligencia, guardia vitalidad).
+  if (level > prevLevel) {
+    const mainStat = CLASS_BALANCE[p.cls].mainStat;
+    stats[mainStat] = stats[mainStat] + 1;
+  }
+
   const history = [...p.history, quest.title].slice(-20);
 
   const next: PlayerState = {
@@ -139,7 +150,6 @@ export async function completeQuest(p: PlayerState, quest: Quest): Promise<Compl
   };
 
   await savePlayer(next);
-  const level = levelFromXp(xp);
   return result(next, prevLevel, xpGain, level);
 }
 
@@ -148,14 +158,20 @@ export async function grantXp(p: PlayerState, amount: number): Promise<CompleteR
   const prevLevel = levelFromXp(p.xp);
   const now = new Date();
   const xp = p.xp + Math.max(0, amount);
+  const level = levelFromXp(xp);
+  const stats: PlayerState["stats"] = { ...p.stats };
+  if (level > prevLevel) {
+    const mainStat = CLASS_BALANCE[p.cls].mainStat;
+    stats[mainStat] = stats[mainStat] + 1;
+  }
   const next: PlayerState = {
     ...p,
     xp,
+    stats,
     streak: nextStreak(p, now),
     lastActiveDate: todayKey(now),
   };
   await savePlayer(next);
-  const level = levelFromXp(xp);
   return result(next, prevLevel, amount, level);
 }
 

@@ -3,7 +3,7 @@ import { itemById } from "../lib/catalog";
 import { xpProgress } from "../lib/xp";
 import {
   combatStats,
-  exLevelFor,
+  exProgress,
   EX_SKILLS,
   classEvolved,
   spellsFor,
@@ -26,17 +26,20 @@ export default function CharacterPanel({ player }: Props) {
   const cs = combatStats(player);
   const evolved = classEvolved(player);
   const ex = EX_SKILLS[player.cls];
-  const spells = spellsFor(progress.level);
+  const exInfo = exProgress(player.battle.exXp);
+  const spells = spellsFor(progress.level, player.elements);
   const weapon = itemById(player.weapon);
   const armor = itemById(player.armor);
   const trinket = itemById(player.trinket);
   const aura = itemById(player.aura);
+  const boots = itemById(player.boots);
 
   const gear: Array<{ label: string; value: string }> = [
     { label: "Arma", value: weapon ? `${weapon.name} (+${weapon.bonus?.dmg ?? 0} dmg)` : "—" },
     { label: "Armadura", value: armor ? `${armor.name} (+${armor.bonus?.def ?? 0} def)` : "—" },
     { label: "Reliquia", value: trinket ? trinket.name : "—" },
     { label: "Aura", value: aura ? aura.name : "—" },
+    { label: "Botas", value: boots ? `${boots.name} (+${boots.bonus?.agi ?? 0} agilidad)` : "—" },
   ];
 
   return (
@@ -58,11 +61,15 @@ export default function CharacterPanel({ player }: Props) {
             {ex.icon} <strong>{ex.name}</strong> — {ex.desc}
           </div>
           <div className="char-class-meta">
-            EX nivel {exLevelFor(player.battle.exXp)}/5 · <span className="ex-bar">
-              <span className="ex-bar-fill" style={{ width: `${Math.min(100, (player.battle.exXp % 40) * 2.5)}%` }} />
+            EX nivel {exInfo.level}/{99} · <span className="ex-bar">
+              <span className="ex-bar-fill" style={{ width: `${Math.round(exInfo.ratio * 100)}%` }} />
             </span>{" "}
-            {player.battle.exXp % 40}/40 XP de EX
+            {exInfo.current}/{exInfo.needed} XP de EX
           </div>
+          <p className="panel-note">
+            La habilidad EX escala +3% de daño/cura por nivel. Hitos: L10 +10% regen de MP · L25 +5% crítico · L75
+            +5% HP máx.
+          </p>
           {!evolved && <p className="panel-note">Evoluciona al llegar al nivel 5 o al piso 4 de la Torre.</p>}
         </div>
       </div>
@@ -77,7 +84,9 @@ export default function CharacterPanel({ player }: Props) {
               <span className="char-stat-value">{player.stats[c]}</span>
             </div>
           ))}
-          <p className="panel-note">Crecen completando quests de esa categoría.</p>
+          <p className="panel-note">
+            Crecen +1 por quest de esa categoría. Al subir de nivel, la stat principal de tu clase sube +1.
+          </p>
         </div>
 
         <div className="panel char-panel">

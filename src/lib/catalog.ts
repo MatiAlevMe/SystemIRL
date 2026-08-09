@@ -103,6 +103,15 @@ export const GEM_ITEMS: ShopItem[] = [
   { id: "g-sombra", name: "Gema de Sombra", kind: "gem", price: 600, desc: "Desbloquea el elemento Sombra." },
 ];
 
+// Elemento que desbloquea cada gema (se agrega a player.elements al comprar).
+export const GEM_ELEMENT: Record<string, string> = {
+  "g-fuego": "fuego",
+  "g-hielo": "hielo",
+  "g-electrico": "electrico",
+  "g-sagrado": "sagrado",
+  "g-sombra": "sombra",
+};
+
 export const LENS_ITEM: ShopItem = {
   id: "item-lente",
   name: "Lente del Sistema",

@@ -36,7 +36,7 @@ export default function BattleModal({ battle, player, result, onAction, onClose,
   const enemies = battle.enemies.filter((e) => e.hp > 0);
   const [selectedId, setSelectedId] = useState<string>(enemies[0]?.id ?? battle.enemies[0]?.id ?? "");
   const me = battle.party.find((m) => m.id === "player") ?? battle.party[0];
-  const mySpells = spellsFor(me.level);
+  const mySpells = spellsFor(me.level, player.elements);
   const ex = EX_SKILLS[me.cls];
   const potions = POTION_IDS.map((id) => ({ id, item: itemById(id), count: player.inventory[id] ?? 0 })).filter(
     (p) => p.item && p.count > 0,

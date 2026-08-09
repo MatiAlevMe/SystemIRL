@@ -3,11 +3,13 @@ import { combatStats, floorInfo } from "../lib/rpg";
 
 interface Props {
   player: PlayerState;
+  energy: number;
+  maxEnergy: number;
   onGrind: () => void;
   onFightBoss: () => void;
 }
 
-export default function TowerPanel({ player, onGrind, onFightBoss }: Props) {
+export default function TowerPanel({ player, energy, maxEnergy, onGrind, onFightBoss }: Props) {
   const { floor: currentFloor, damage } = player.tower;
   const current = floorInfo(currentFloor);
   const currentHp = current.hp;
@@ -22,6 +24,9 @@ export default function TowerPanel({ player, onGrind, onFightBoss }: Props) {
       <div className="section-head">
         <h2>La Torre del Sistema</h2>
         <span className="quest-source gemini">Piso {currentFloor}</span>
+        <span className={`quest-source ${energy > 0 ? "gemini" : "offline"}`} title="Energía de la Torre (se reinicia cada día)">
+          ⚡ {energy}/{maxEnergy}
+        </span>
       </div>
 
       {current && (
@@ -51,9 +56,11 @@ export default function TowerPanel({ player, onGrind, onFightBoss }: Props) {
             </span>
           </div>
           <div className="tower-actions">
-            <button className="ghost-btn" onClick={onGrind}>⚔ Luchar</button>
-            <button className="primary-btn" onClick={onFightBoss} disabled={conquered}>
-              {conquered ? "✓ Conquistado" : "👹 Luchar contra jefe"}
+            <button className="ghost-btn" onClick={onGrind} disabled={energy < 1}>
+              {energy < 1 ? "Sin energía" : "⚔ Luchar (1 ⚡)"}
+            </button>
+            <button className="primary-btn" onClick={onFightBoss} disabled={conquered || energy < 2}>
+              {conquered ? "✓ Conquistado" : energy < 2 ? "Jefe (2 ⚡)" : "👹 Luchar contra jefe"}
             </button>
           </div>
         </div>
@@ -86,8 +93,9 @@ export default function TowerPanel({ player, onGrind, onFightBoss }: Props) {
       </div>
 
       <p className="panel-note">
-        Cada quest completada daña al jefe del piso actual y cura un poco de HP. Luchar es por turnos:
-        probá elementos para revelar la debilidad de cada monstruo (One More). Si caes, quedás con 1 HP.
+        Cada quest completada daña al jefe del piso actual y cura un poco de HP. Luchar cuesta energía de Torre
+        (1 por grind, 2 por jefe; se reinicia cada día). El combate es por turnos: probá elementos para revelar la
+        debilidad de cada monstruo (One More). Si caes, quedás con 1 HP.
       </p>
     </section>
   );

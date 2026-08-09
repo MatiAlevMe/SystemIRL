@@ -9,7 +9,14 @@ import type { PlayerClass, PlayerState, Quest, QuestCategory, QuestDifficulty } 
 import { CLASS_ICON } from "../types";
 import { xpProgress } from "./xp";
 import { itemById, WEAPON_ITEMS, type ShopItem } from "./catalog";
-import { CLASS_BALANCE, BOSS_SPEED_CAP_MULT, MAX_EX_LEVEL, exXpForLevel } from "./balance";
+import {
+  CLASS_BALANCE,
+  BOSS_SPEED_CAP_MULT,
+  MAX_EX_LEVEL,
+  exEffectMultiplier,
+  exMilestoneBonus,
+  exXpForLevel,
+} from "./balance";
 
 // ---- La Torre del Sistema ------------------------------------
 // Pisos con jefe: completar quests daña al jefe del piso actual; al caer,
@@ -129,6 +136,9 @@ export const ELEMENT_ICON: Record<Element, string> = {
   sombra: "🌑",
 };
 
+// Elementos con los que juegan los bots de la party (todos desbloqueados).
+export const ALL_ELEMENTS: Element[] = ["fisico", "fuego", "hielo", "electrico", "sagrado", "sombra"];
+
 // Debilidad = x1.6 · resistencia = x0.6. La debilidad se revela al golpear.
 export const RACE_WEAKNESS: Record<Race, Element> = {
   bestia: "fuego",
@@ -162,6 +172,20 @@ export function exLevelFor(exXp: number): number {
     level++;
   }
   return level;
+}
+
+// Progreso dentro del nivel EX actual (para la barra de la UI).
+export function exProgress(exXp: number): { level: number; current: number; needed: number; ratio: number } {
+  let level = 1;
+  let accumulated = 0;
+  while (level < MAX_EX_LEVEL) {
+    const needed = exXpForLevel(level);
+    if (accumulated + needed > exXp) break;
+    accumulated += needed;
+    level++;
+  }
+  const needed = exXpForLevel(level);
+  return { level, current: exXp - accumulated, needed, ratio: needed > 0 ? Math.min(1, (exXp - accumulated) / needed) : 1 };
 }
 
 export function classEvolved(player: PlayerState): boolean {
@@ -232,6 +256,8 @@ export function combatStats(p: PlayerState): CombatStats {
   const trinket = itemById(p.trinket);
   const aura = itemById(p.aura);
   const boots = itemById(p.boots);
+  const title = itemById(p.title);
+  const exBonus = exMilestoneBonus(p.battle.exLevel);
   const s = p.stats;
 
   let maxHp = 50 + s.vitality * 2 + level * 10;
@@ -256,6 +282,14 @@ export function combatStats(p: PlayerState): CombatStats {
   maxHp += maxHp * (aura?.bonus?.hpPct ?? 0);
   atk += atk * (aura?.bonus?.atkPct ?? 0);
   crit += aura?.bonus?.crit ?? 0;
+
+  // Títulos equipados: pasivas de ataque/defensa en %.
+  atk += atk * (title?.bonus?.atkPct ?? 0);
+  def += def * (title?.bonus?.defPct ?? 0);
+
+  // Hitos EX: +5% crítico (L25+) y +5% HP máx (L75+).
+  crit += exBonus.crit;
+  maxHp += maxHp * exBonus.hpPct;
 
   return {
     maxHp: Math.round(maxHp),
@@ -399,6 +433,8 @@ export interface Member {
   evolved: boolean;
   agility: number;
   agenda: number;
+  exLevel: number;
+  elements: string[];
 }
 
 export interface EnemyState {
@@ -483,6 +519,8 @@ export function buildParty(player: PlayerState, bots: Array<{ name: string; cls:
       evolved: classEvolved(player),
       agility: cs.agility,
       agenda: 0,
+      exLevel: player.battle.exLevel,
+      elements: player.elements ?? [],
     },
   ];
   for (const b of bots) {
@@ -507,6 +545,8 @@ export function buildParty(player: PlayerState, bots: Array<{ name: string; cls:
       evolved: b.level >= 5,
       agility: baseAgi + b.level,
       agenda: 0,
+      exLevel: 1,
+      elements: ALL_ELEMENTS,
     });
   }
   return team;
@@ -641,9 +681,11 @@ function useItem(s: BattleState, p: Member, itemId: string): void {
 function useEx(s: BattleState, p: Member, ex: ExSkill, targetId?: string): void {
   const targets = livingEnemies(s);
   const target = targets.find((e) => e.id === targetId) ?? targets[0];
+  // El nivel EX escala el efecto: +3% de daño/cura por nivel (fórmula de balance.ts).
+  const mult = exEffectMultiplier(p.exLevel);
   p.gauge = 0;
   if (ex.kind === "attack") {
-    if (target) hitEnemy(s, p, target, "fisico", p.atk * (ex.dmg ?? 1));
+    if (target) hitEnemy(s, p, target, "fisico", p.atk * (ex.dmg ?? 1) * mult);
     pushLog(s, "ex", `⭐ ¡${ex.name}!`);
   } else if (ex.kind === "guard") {
     s.shield = true;
@@ -651,12 +693,12 @@ function useEx(s: BattleState, p: Member, ex: ExSkill, targetId?: string): void 
   } else if (ex.kind === "heal") {
     for (const m of s.party) {
       if (m.hp <= 0) continue;
-      m.hp = Math.min(m.maxHp, m.hp + Math.round(m.maxHp * (ex.healPct ?? 0.5)));
+      m.hp = Math.min(m.maxHp, m.hp + Math.round(m.maxHp * (ex.healPct ?? 0.5) * mult));
     }
     pushLog(s, "heal", `✨ ¡${ex.name}! La party fue sanada.`);
   } else if (ex.kind === "multi") {
     for (const e of targets) {
-      for (let i = 0; i < 3; i++) hitEnemy(s, p, e, "fisico", p.atk * (ex.dmg ?? 1));
+      for (let i = 0; i < 3; i++) hitEnemy(s, p, e, "fisico", p.atk * (ex.dmg ?? 1) * mult);
     }
     pushLog(s, "ex", `🏹 ¡${ex.name}! ${targets.length} enemigo(s) alcanzado(s).`);
   }
@@ -725,7 +767,7 @@ function autoAct(s: BattleState, bot: Member): void {
   const enemies = livingEnemies(s);
   if (enemies.length === 0) return;
   const low = bot.hp / bot.maxHp < 0.35;
-  const healSpell = spellsFor(bot.level).find((sp) => sp.heal);
+  const healSpell = spellsFor(bot.level, bot.elements).find((sp) => sp.heal);
 
   if (bot.gauge >= 100) {
     useEx(s, bot, EX_SKILLS[bot.cls], enemies[0].id);
@@ -747,7 +789,7 @@ function autoAct(s: BattleState, bot: Member): void {
   }
   const known = enemies.find((e) => e.revealed.length > 0)?.revealed[0];
   if (known) {
-    const sp = spellsFor(bot.level).find((x) => x.element === known && !x.heal && bot.mp >= x.cost);
+    const sp = spellsFor(bot.level, bot.elements).find((x) => x.element === known && !x.heal && bot.mp >= x.cost);
     if (sp) {
       bot.mp -= sp.cost;
       bot.gauge = Math.min(100, bot.gauge + 15);
@@ -780,7 +822,9 @@ function enemyPhase(s: BattleState): void {
 function regenMp(s: BattleState): void {
   for (const m of s.party) {
     if (m.hp <= 0) continue;
-    m.mp = Math.min(m.maxMp, m.mp + MP_REGEN);
+    // Hito EX L10+: +10% de regen de MP.
+    const regenPct = exMilestoneBonus(m.exLevel).regenPct;
+    m.mp = Math.min(m.maxMp, m.mp + Math.round(MP_REGEN * (1 + regenPct)));
   }
 }
 
@@ -867,9 +911,12 @@ export function battlePersist(player: PlayerState, battle: BattleState, result: 
     else inventory[id] = n;
   }
   const exXp = player.battle.exXp + result.exXpGained;
+  // Título equipado: pasiva de oro en % sobre el botín.
+  const title = itemById(player.title);
+  const coinGain = Math.round(result.coins * (1 + (title?.bonus?.coinPct ?? 0)));
   const next: PlayerState = {
     ...player,
-    coins: player.coins + result.coins,
+    coins: player.coins + coinGain,
     inventory,
     battle: {
       ...player.battle,

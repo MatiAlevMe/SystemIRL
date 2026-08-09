@@ -47,7 +47,7 @@ import {
   type BattleResult,
   type BattleState,
 } from "./lib/rpg";
-import { itemById, RAID_AURAS, type ShopItem } from "./lib/catalog";
+import { itemById, RAID_AURAS, GEM_ELEMENT, type ShopItem } from "./lib/catalog";
 import { weekRaid, weeklyRaidGoal } from "./lib/raids";
 import { RAID_META_DAMAGE_PCT, MAX_TOWER_ENERGY, MAX_ARENA_1V1_ENERGY, MAX_ARENA_TOURNAMENT_ENERGY } from "./lib/balance";
 import { playComplete, playDefeat, playLevelUp, playVictory } from "./lib/sound";
@@ -339,7 +339,9 @@ export default function App() {
       rankBias: rankBiasOf(player),
       force: true,
     });
-    const merged = [...(quests ?? []).filter((q) => doneIds.has(q.id)), ...res.quests];
+    // La API clampea el count a [3,6]: si quedaron 4+ completadas, se recortan
+    // las nuevas para que la grilla nunca supere las 6 cards del día.
+    const merged = [...(quests ?? []).filter((q) => doneIds.has(q.id)), ...res.quests].slice(0, 6);
     await saveQuestCache(todayKey(), merged);
     setQuests(merged);
     setQuestSource(res.source);
@@ -354,10 +356,13 @@ export default function App() {
         const tower = advanceTower(res.player, q);
         let next = healFromQuest(res.player, q.difficulty);
         if (res.leveledUp) next = restoreFull(next);
+        // Pasiva de oro del título equipado (coinPct).
+        const titleCoin = itemById(player.title)?.bonus?.coinPct ?? 0;
+        const coinGain = Math.round((tower.coins + questCoins(q.difficulty)) * (1 + titleCoin));
         next = {
           ...next,
           tower: { floor: tower.floor, damage: tower.damage },
-          coins: next.coins + tower.coins + questCoins(q.difficulty),
+          coins: next.coins + coinGain,
         };
         setPlayer(next);
         await savePlayer(next);
@@ -369,7 +374,7 @@ export default function App() {
         if (res.leveledUp) playLevelUp();
         setXpFloat({
           id: ++floatIdRef.current,
-          text: `+${res.xpGained} XP · +${tower.coins + questCoins(q.difficulty)} oro`,
+          text: `+${res.xpGained} XP · +${coinGain} oro`,
         });
 
         if (partyCode) {
@@ -391,13 +396,27 @@ export default function App() {
   // ---- Combate táctico (Torre + raid) ----
   const handleGrind = useCallback(() => {
     if (!player) return;
+    const energy = player.energy ?? { tower: MAX_TOWER_ENERGY, arena1v1: 2, arenaTourney: 1, lastReset: todayKey() };
+    if (energy.tower < 1) {
+      setToast({ id: `tower-no-energy-${Date.now()}`, text: "⚡ Sin energía de Torre hoy. Volvé mañana.", kind: "done" });
+      return;
+    }
     setBattleResult(null);
+    setPlayer({ ...player, energy: { ...energy, tower: energy.tower - 1 } });
+    void savePlayer({ ...player, energy: { ...energy, tower: energy.tower - 1 } });
     setBattle(startGrindBattle(player, player.tower.floor));
   }, [player]);
 
   const handleFightBoss = useCallback(() => {
     if (!player) return;
+    const energy = player.energy ?? { tower: MAX_TOWER_ENERGY, arena1v1: 2, arenaTourney: 1, lastReset: todayKey() };
+    if (energy.tower < 2) {
+      setToast({ id: `tower-no-energy-${Date.now()}`, text: "⚡ El jefe requiere 2 de energía de Torre.", kind: "done" });
+      return;
+    }
     setBattleResult(null);
+    setPlayer({ ...player, energy: { ...energy, tower: energy.tower - 2 } });
+    void savePlayer({ ...player, energy: { ...energy, tower: energy.tower - 2 } });
     setBattle(startBossBattle(player));
   }, [player]);
 
@@ -619,7 +638,12 @@ export default function App() {
       else if (item.kind === "weapon") next.weapon = item.id;
       else if (item.kind === "armor") next.armor = item.id;
       else if (item.kind === "trinket") next.trinket = item.id;
+      else if (item.kind === "boots") next.boots = item.id;
       else if (item.kind === "music") next.music = true;
+      else if (item.kind === "gem") {
+        const el = GEM_ELEMENT[item.id];
+        if (el && !(next.elements ?? []).includes(el)) next.elements = [...(next.elements ?? []), el];
+      }
       setPlayer(next);
       void savePlayer(next);
     },
@@ -636,6 +660,7 @@ export default function App() {
       else if (item.kind === "armor") next.armor = item.id;
       else if (item.kind === "trinket") next.trinket = item.id;
       else if (item.kind === "aura") next.aura = item.id;
+      else if (item.kind === "boots") next.boots = item.id;
       else if (item.kind === "music") next.music = true;
       setPlayer(next);
       void savePlayer(next);
@@ -800,7 +825,13 @@ export default function App() {
             onChangeClass={handleChangeClass}
           />
         ) : tab === "tower" ? (
-          <TowerPanel player={player} onGrind={handleGrind} onFightBoss={handleFightBoss} />
+          <TowerPanel
+            player={player}
+            energy={player.energy?.tower ?? MAX_TOWER_ENERGY}
+            maxEnergy={MAX_TOWER_ENERGY}
+            onGrind={handleGrind}
+            onFightBoss={handleFightBoss}
+          />
         ) : tab === "arena" ? (
           <ArenaPanel
             player={player}
@@ -875,7 +906,7 @@ export default function App() {
           result={battleResult}
           onAction={handleBattleAction}
           onClose={handleCloseBattle}
-          revealWeakness={revealWeakness}
+          revealWeakness={revealWeakness || player.owned.includes("item-lente")}
         />
       )}
 
