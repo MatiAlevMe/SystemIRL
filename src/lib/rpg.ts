@@ -453,6 +453,7 @@ export interface EnemyState {
   maxHp: number;
   atk: number;
   def: number;
+  agility: number;
   coins: number;
   exXp: number;
   dropChance: number;
@@ -466,7 +467,7 @@ export interface LogEntry {
   text: string;
 }
 
-export type BattleMode = "grind" | "boss" | "raid";
+export type BattleMode = "grind" | "boss" | "raid" | "duel" | "tourney";
 export type BattleOutcome = "victory" | "defeat" | "fled";
 
 export interface BattleState {
@@ -577,6 +578,7 @@ export function buildBattle(mode: BattleMode, enemies: Enemy[], party: Member[])
       maxHp: e.hp,
       atk: e.atk,
       def: e.def,
+      agility: Math.max(30, Math.round(e.atk * 2)),
       coins: e.coinsMin + Math.floor(Math.random() * (e.coinsMax - e.coinsMin + 1)),
       exXp: e.exXp,
       dropChance: e.dropChance,
@@ -613,6 +615,133 @@ export function startRaidBattle(
   bots: Array<{ name: string; cls: PlayerClass; level: number }> = [],
 ): BattleState {
   return buildBattle("raid", [raidBossEnemy(currentHp)], buildParty(player, bots));
+}
+
+// ---- Arena: duelo 1v1 y torneo de 16 gladiadores --------------
+const CLASS_RACE: Record<PlayerClass, Race> = {
+  cazador: "cazador",
+  guerrero: "demonio",
+  sabio: "bestia",
+  guardia: "constructo",
+};
+
+// Construye un enemigo que representa a un bot/rival de la Arena.
+export function duelEnemy(bot: { name: string; cls: PlayerClass; level: number }): Enemy {
+  return {
+    id: `duel-${bot.name}`,
+    name: bot.name,
+    race: CLASS_RACE[bot.cls],
+    attackElement: (CLASS_BALANCE[bot.cls]?.defaultElement ?? "fisico") as Element,
+    icon: CLASS_ICON[bot.cls],
+    hp: 40 + bot.level * 14,
+    atk: 7 + bot.level * 2.4,
+    def: 3 + bot.level * 1.6,
+    coinsMin: 12 + bot.level * 6,
+    coinsMax: 18 + bot.level * 10,
+    exXp: 6 + bot.level * 2,
+    dropChance: 0.05,
+  };
+}
+
+export function startDuelBattle(player: PlayerState, bot: { name: string; cls: PlayerClass; level: number }): BattleState {
+  return buildBattle("duel", [duelEnemy(bot)], buildParty(player));
+}
+
+export interface Gladiator {
+  id: string;
+  name: string;
+  cls: PlayerClass;
+  level: number;
+  power: number;
+}
+
+const GLADIATOR_NAMES = [
+  "Valkyria",
+  "Kaiser",
+  "Phantom",
+  "Dragon",
+  "Oni",
+  "Ronin",
+  "Midas",
+  "Vortex",
+  "Zenith",
+  "Crimson",
+  "Obelix",
+  "Nomad",
+  "Falco",
+  "Titan",
+  "Nyx",
+];
+
+const CLASS_POWER: Record<PlayerClass, number> = { guerrero: 1.15, guardia: 1.1, sabio: 1.05, cazador: 1.2 };
+const TOURNEY_CLASSES: PlayerClass[] = ["guerrero", "guardia", "sabio", "cazador"];
+
+// Bracket inicial del Torneo de 16: el jugador es seed 1 (primer rival el más débil).
+export function buildTournament(
+  player: PlayerState,
+  bots: Array<{ name: string; cls: PlayerClass; level: number }> = [],
+): Gladiator[] {
+  const lvl = xpProgress(player.xp).level;
+  const glads: Gladiator[] = [];
+  const used = new Set<string>();
+  const add = (name: string, cls: PlayerClass, level: number) => {
+    if (used.has(name)) return;
+    used.add(name);
+    glads.push({
+      id: `glad-${name}`,
+      name,
+      cls,
+      level,
+      power: Math.round(level * 10 * (CLASS_POWER[cls] ?? 1) * (0.9 + Math.random() * 0.2)),
+    });
+  };
+  // El jugador siempre participa como seed 1, aunque su nombre colisione.
+  used.add(player.name);
+  glads.push({
+    id: `glad-${player.name}`,
+    name: player.name,
+    cls: player.cls,
+    level: lvl,
+    power: Math.round(lvl * 10 * (CLASS_POWER[player.cls] ?? 1)),
+  });
+  for (const b of bots) add(b.name, b.cls, Math.max(1, Math.round(b.level * 1.2)));
+  let i = 0;
+  while (glads.length < 16) {
+    const name = GLADIATOR_NAMES[i % GLADIATOR_NAMES.length] + (i >= GLADIATOR_NAMES.length ? ` ${Math.floor(i / GLADIATOR_NAMES.length) + 2}` : "");
+    add(name, TOURNEY_CLASSES[i % TOURNEY_CLASSES.length], Math.max(1, Math.round(lvl * (1 + 0.18 * (i % 5)) + (i % 3))));
+    i++;
+  }
+  const [me] = glads;
+  const rest = glads.slice(1).sort((a, b) => a.power - b.power);
+  return [me, ...rest];
+}
+
+// Combate de torneo contra un gladiador (más botín que un duelo).
+export function startTourneyMatch(player: PlayerState, glad: Gladiator): BattleState {
+  const enemy = duelEnemy({ name: glad.name, cls: glad.cls, level: glad.level });
+  enemy.coinsMin += 30;
+  enemy.coinsMax += 50;
+  enemy.exXp += 10;
+  return buildBattle("tourney", [enemy], buildParty(player));
+}
+
+// Simulación de un match entre dos gladiadores (ponderada por poder).
+export function simulateMatch(a: Gladiator, b: Gladiator): Gladiator {
+  const total = a.power + b.power;
+  return Math.random() * total <= a.power ? a : b;
+}
+
+// Resuelve una ronda: el match del jugador es real (playerWon); el resto se simula.
+export function resolveRound(bracket: Gladiator[], playerName: string, playerWon: boolean): Gladiator[] {
+  const winners: Gladiator[] = [];
+  for (let i = 0; i < bracket.length; i += 2) {
+    const a = bracket[i];
+    const b = bracket[i + 1];
+    if (a.name === playerName) winners.push(playerWon ? a : b);
+    else if (b.name === playerName) winners.push(playerWon ? b : a);
+    else winners.push(simulateMatch(a, b));
+  }
+  return winners;
 }
 
 // ---- Motor de combate ------------------------------------------
@@ -873,27 +1002,22 @@ function autoAct(s: BattleState, bot: Member): void {
   hitEnemy(s, bot, enemies[0], "fisico", bot.atk);
 }
 
-function enemyPhase(s: BattleState): void {
-  for (const e of s.enemies) {
-    if (e.hp <= 0) continue;
-    const alive = livingParty(s);
-    if (alive.length === 0) break;
-    const target = alive[Math.floor(Math.random() * alive.length)];
-    let dmg = e.atk - target.def + rand(0, 3);
-    if (target.defending) dmg *= 0.5;
-    if (s.shield) dmg *= 0.3;
-    else if (s.rsShield) dmg *= 0.5;
-    // Pasiva de Raid Skill (guardia): -4% de daño recibido por nivel.
-    if (target.cls === "guardia" && target.raidSkill > 1) dmg *= 1 - raidSkillBonus(target.raidSkill);
-    dmg = Math.max(1, Math.round(dmg));
-    target.hp = Math.max(0, target.hp - dmg);
-    target.gauge = Math.min(100, target.gauge + 6);
-    pushLog(s, "enemy", `${e.icon} ${e.name} atacó a ${target.name}: -${dmg}`);
-    if (target.hp <= 0) pushLog(s, "enemy", `💀 ${target.name} cayó.`);
-  }
-  for (const m of s.party) m.defending = false;
-  s.shield = false;
-  s.rsShield = false;
+// Ataque de un único enemigo. Los bosses respetan el tope de velocidad.
+function enemyAttack(s: BattleState, e: EnemyState): void {
+  const alive = livingParty(s);
+  if (alive.length === 0) return;
+  const target = alive[Math.floor(Math.random() * alive.length)];
+  let dmg = e.atk - target.def + rand(0, 3);
+  if (target.defending) dmg *= 0.5;
+  if (s.shield) dmg *= 0.3;
+  else if (s.rsShield) dmg *= 0.5;
+  // Pasiva de Raid Skill (guardia): -4% de daño recibido por nivel.
+  if (target.cls === "guardia" && target.raidSkill > 1) dmg *= 1 - raidSkillBonus(target.raidSkill);
+  dmg = Math.max(1, Math.round(dmg));
+  target.hp = Math.max(0, target.hp - dmg);
+  target.gauge = Math.min(100, target.gauge + 6);
+  pushLog(s, "enemy", `${e.icon} ${e.name} atacó a ${target.name}: -${dmg}`);
+  if (target.hp <= 0) pushLog(s, "enemy", `💀 ${target.name} cayó.`);
 }
 
 function regenMp(s: BattleState): void {
@@ -926,14 +1050,45 @@ function buildResult(s: BattleState, kind: BattleOutcome): BattleResult {
   };
 }
 
+// Tope de velocidad de bosses: nunca superan 1.4× el aliado vivo más lento.
+function bossSpeedCapFor(s: BattleState): number {
+  const alive = livingParty(s);
+  const minAgi = alive.length > 0 ? Math.min(...alive.map((m) => m.agility)) : 40;
+  return Math.round(minAgi * BOSS_SPEED_CAP_MULT);
+}
+
+// Agilidad efectiva de un enemigo (los bosses respetan el tope).
+export function enemySpeed(e: EnemyState, cap: number): number {
+  return e.isBoss ? Math.min(e.agility, cap) : e.agility;
+}
+
+export interface TurnOrderItem {
+  id: string;
+  name: string;
+  icon: string;
+  kind: "party" | "enemy";
+  agility: number;
+}
+
+// Orden de la próxima ronda (ATB-lite): la agilidad define quién actúa primero.
+export function nextTurnOrder(s: BattleState): TurnOrderItem[] {
+  const cap = bossSpeedCapFor(s);
+  const items: TurnOrderItem[] = [
+    ...s.party
+      .filter((m) => m.hp > 0)
+      .map((m) => ({ id: m.id, name: m.name, icon: m.icon, kind: "party" as const, agility: m.agility })),
+    ...s.enemies
+      .filter((e) => e.hp > 0)
+      .map((e) => ({ id: e.id, name: e.name, icon: e.icon, kind: "enemy" as const, agility: enemySpeed(e, cap) })),
+  ];
+  return items.sort((a, b) => b.agility - a.agility || a.name.localeCompare(b.name));
+}
+
 // Una acción del jugador → avanza los turnos determinísticamente según agilidad (ATB-lite).
+// El jugador actúa al tocar el botón; bots y enemigos se intercalan en la ronda por agilidad.
 export function act(state: BattleState, action: BattleAction): { state: BattleState; result: BattleResult | null } {
   if (state.result) return { state, result: null };
   const s = clone(state);
-
-  const aliveParty = livingParty(s);
-  const minPartyAgi = aliveParty.length > 0 ? Math.min(...aliveParty.map((m) => m.agility)) : 40;
-  const maxBossAgi = Math.round(minPartyAgi * BOSS_SPEED_CAP_MULT);
 
   const p = s.party[0];
   if (p && p.hp > 0) {
@@ -947,10 +1102,27 @@ export function act(state: BattleState, action: BattleAction): { state: BattleSt
     }
   }
 
-  for (const bot of s.party.slice(1)) {
-    if (bot.hp > 0 && livingEnemies(s).length > 0) {
-      autoAct(s, bot);
+  // Ronda ATB-lite: bots y enemigos vivos se ordenan por agilidad (bosses con tope 1.4×).
+  if (livingEnemies(s).length > 0) {
+    const cap = bossSpeedCapFor(s);
+    const order: Array<{ kind: "bot" | "enemy"; speed: number; bot?: Member; enemy?: EnemyState }> = [
+      ...s.party
+        .slice(1)
+        .filter((m) => m.hp > 0)
+        .map((m) => ({ kind: "bot" as const, speed: m.agility, bot: m })),
+      ...s.enemies
+        .filter((e) => e.hp > 0)
+        .map((e) => ({ kind: "enemy" as const, speed: enemySpeed(e, cap), enemy: e })),
+    ];
+    order.sort((a, b) => b.speed - a.speed || (a.kind === b.kind ? (a.bot?.name ?? a.enemy?.name ?? "").localeCompare(b.bot?.name ?? b.enemy?.name ?? "") : 0));
+    for (const item of order) {
+      if (livingEnemies(s).length === 0 || livingParty(s).length === 0) break;
+      if (item.bot && item.bot.hp > 0) autoAct(s, item.bot);
+      else if (item.enemy && item.enemy.hp > 0) enemyAttack(s, item.enemy);
     }
+    for (const m of s.party) m.defending = false;
+    s.shield = false;
+    s.rsShield = false;
   }
 
   if (livingEnemies(s).length === 0) {
@@ -959,14 +1131,6 @@ export function act(state: BattleState, action: BattleAction): { state: BattleSt
     return { state: s, result: buildResult(s, "victory") };
   }
 
-  for (const enemy of s.enemies) {
-    if (enemy.isBoss && enemy.atk > 0) {
-      const effAgi = Math.min(enemy.atk * 2, maxBossAgi);
-      enemy.def = Math.max(enemy.def, Math.round(effAgi * 0.1));
-    }
-  }
-
-  enemyPhase(s);
   regenMp(s);
 
   if (livingParty(s).length === 0) {

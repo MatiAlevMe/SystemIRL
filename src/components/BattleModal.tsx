@@ -9,6 +9,7 @@ import {
   RACE_WEAKNESS,
   SPELLS,
   spellsFor,
+  nextTurnOrder,
   type BattleAction,
   type BattleResult,
   type BattleState,
@@ -28,6 +29,8 @@ const MODE_LABEL: Record<BattleState["mode"], string> = {
   grind: "GRIND",
   boss: "JEFE DE TORRE",
   raid: "RAID",
+  duel: "DUELO 1v1",
+  tourney: "TORNEO",
 };
 
 const POTION_IDS = ["p-pocion", "p-eter", "p-ex-menor", "p-elixir", "p-mayor", "p-ex-mayor", "p-ex-superior"];
@@ -137,6 +140,16 @@ export default function BattleModal({ battle, player, result, onAction, onClose,
               {me.hp}/{me.maxHp} HP · {me.mp}/{me.maxMp} MP · EX {Math.round(me.gauge)}%
             </div>
           </div>
+        </div>
+
+        <div className="turn-order-strip" title="Orden de la próxima ronda (por agilidad)">
+          <span className="to-label">Orden</span>
+          {nextTurnOrder(battle).map((t) => (
+            <span key={t.id} className={`to-chip ${t.kind}`} title={`${t.name} · ${t.agility} agilidad`}>
+              {t.icon}
+              <em>{t.agility}</em>
+            </span>
+          ))}
         </div>
 
         <div className="battle-log" ref={logRef}>

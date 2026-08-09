@@ -1296,6 +1296,51 @@ button {
   line-height: 1.5;
 }
 
+.turn-order-strip {
+  margin-top: 12px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.turn-order-strip .to-label {
+  font-size: 9px;
+  letter-spacing: 0.15em;
+  color: #5a6480;
+  margin-right: 2px;
+  text-transform: uppercase;
+}
+
+.turn-order-strip .to-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 12px;
+  padding: 2px 6px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.turn-order-strip .to-chip.party {
+  border: 1px solid rgba(83, 199, 255, 0.35);
+  color: #c9d4ff;
+}
+
+.turn-order-strip .to-chip.enemy {
+  border: 1px solid rgba(255, 107, 131, 0.35);
+  color: #ff8c9f;
+}
+
+.turn-order-strip .to-chip em {
+  font-style: normal;
+  font-size: 10px;
+  color: #8b95ad;
+}
+
 .battle-log-empty {
   color: #5a6480;
   font-style: italic;

@@ -35,16 +35,21 @@ import {
   act,
   advanceTower,
   battlePersist,
+  buildTournament,
   floorInfo,
   healFromQuest,
   questCoins,
+  resolveRound,
   restoreFull,
   startBossBattle,
+  startDuelBattle,
   startGrindBattle,
   startRaidBattle,
+  startTourneyMatch,
   type BattleAction,
   type BattleResult,
   type BattleState,
+  type Gladiator,
 } from "./lib/rpg";
 import { itemById, RAID_AURAS, GEM_ELEMENT, type ShopItem } from "./lib/catalog";
 import { weekRaid, weeklyRaidGoal } from "./lib/raids";
@@ -74,6 +79,8 @@ function weekRaidKey(): string {
 function raidContribKey(): string {
   return "raid-contrib:" + weekRaid();
 }
+
+const ROUND_LABELS = ["Ronda de 16", "Cuartos de final", "Semifinal", "FINAL"];
 
 const TOAST_ICON: Record<string, string> = {
   levelup: "⚡",
@@ -182,6 +189,8 @@ export default function App() {
   const [revealWeakness, setRevealWeakness] = useState(false);
   const [raidTier, setRaidTier] = useState(readRaidTier);
   const [raidNonce, setRaidNonce] = useState(0);
+  const [tourney, setTourney] = useState<{ round: number; bracket: Gladiator[] } | null>(null);
+  const [pendingTourney, setPendingTourney] = useState<{ round: number; bracket: Gladiator[]; opponent: Gladiator } | null>(null);
 
   const party = useChannel<PartyMessage>({
     channelId: partyCode ? `party-${partyCode}` : undefined,
@@ -509,6 +518,42 @@ export default function App() {
     setBattle(startRaidBattle(player, raidState.hp, botManager.members()));
   }, [player, partyCode, raidState.hp]);
 
+  const handleStart1v1 = useCallback(
+    (botName: string) => {
+      if (!player) return;
+      const bot = botManager.members().find((b) => b.name === botName);
+      if (!bot) return;
+      const energy = player.energy ?? { tower: MAX_TOWER_ENERGY, arena1v1: 2, arenaTourney: 1, lastReset: todayKey() };
+      if (energy.arena1v1 <= 0) return;
+      const next = { ...player, energy: { ...energy, arena1v1: energy.arena1v1 - 1 } };
+      setPlayer(next);
+      void savePlayer(next);
+      setBattleResult(null);
+      setBattle(startDuelBattle(next, bot));
+    },
+    [player],
+  );
+
+  const handleStartTournament = useCallback(() => {
+    if (!player) return;
+    const energy = player.energy ?? { tower: MAX_TOWER_ENERGY, arena1v1: 2, arenaTourney: 1, lastReset: todayKey() };
+    if (energy.arenaTourney <= 0) return;
+    const next = { ...player, energy: { ...energy, arenaTourney: energy.arenaTourney - 1 } };
+    setPlayer(next);
+    void savePlayer(next);
+    const bracket = buildTournament(next, botManager.members());
+    const t = { round: 1, bracket };
+    setTourney(t);
+    setPendingTourney(null);
+    setBattleResult(null);
+    setBattle(startTourneyMatch(next, bracket[1]));
+    setToast({
+      id: `tourney-start-${Date.now()}`,
+      text: `🏆 ¡Torneo de 16 comenzó! ${ROUND_LABELS[0]} vs ${bracket[1].name} (Nv ${bracket[1].level})`,
+      kind: "levelup",
+    });
+  }, [player]);
+
   const handleBattleAction = useCallback(
     (action: BattleAction) => {
       if (!player || !battle || battle.result) return;
@@ -574,6 +619,54 @@ export default function App() {
         }
       }
 
+      // Duelo 1v1: victoria = botín del rival.
+      if (state.mode === "duel" && result.victory) {
+        setToast({
+          id: `duel-win-${Date.now()}`,
+          text: `🥊 ¡Duelo ganado! +${result.coins} oro · +${result.exXpGained} XP de EX`,
+          kind: "levelup",
+        });
+      }
+
+      // Torneo de 16: el match del jugador es real; el resto de la ronda se simula.
+      if (state.mode === "tourney") {
+        const t = tourney;
+        if (result.victory && t) {
+          if (t.round >= 4) {
+            next = { ...next, coins: next.coins + 300 };
+            setTourney(null);
+            setPendingTourney(null);
+            setToast({
+              id: `tourney-champ-${Date.now()}`,
+              text: `🏆 ¡CAMPEÓN DEL TORNEO! +${result.coins + 300} oro`,
+              kind: "levelup",
+            });
+            playLevelUp();
+          } else {
+            const winners = resolveRound(t.bracket, player.name, true);
+            const nextRound = t.round + 1;
+            const pi = winners.findIndex((g) => g.name === player.name);
+            const opponent = winners[pi + 1] ?? winners[(pi + 1) % winners.length];
+            const nt = { round: nextRound, bracket: winners };
+            setTourney(nt);
+            setPendingTourney({ round: nextRound, bracket: winners, opponent });
+            setToast({
+              id: `tourney-adv-${Date.now()}`,
+              text: `🥊 ¡Pasas a ${ROUND_LABELS[nextRound - 1]}! Rival: ${opponent.name} (Nv ${opponent.level})`,
+              kind: "levelup",
+            });
+          }
+        } else if (t) {
+          setTourney(null);
+          setPendingTourney(null);
+          setToast({
+            id: `tourney-out-${Date.now()}`,
+            text: `💀 Eliminado en ${ROUND_LABELS[t.round - 1]}.`,
+            kind: "done",
+          });
+        }
+      }
+
       if (result.victory) playVictory();
       else playDefeat();
 
@@ -581,13 +674,19 @@ export default function App() {
       setPlayer(next);
       void savePlayer(next);
     },
-    [player, battle, partyCode, party, raidTier],
+    [player, battle, partyCode, party, raidTier, tourney],
   );
 
   const handleCloseBattle = useCallback(() => {
     setBattle(null);
     setBattleResult(null);
-  }, []);
+    // Si quedó un torneo pendiente, arranca el próximo combate de la ronda.
+    const pt = pendingTourney;
+    if (pt && player) {
+      setPendingTourney(null);
+      setBattle(startTourneyMatch(player, pt.opponent));
+    }
+  }, [pendingTourney, player]);
 
   // Autopilot (God Mode): completa las quests pendientes solas para la demo.
   useEffect(() => {
@@ -986,28 +1085,9 @@ export default function App() {
           <ArenaPanel
             player={player}
             bots={botManager.members()}
-            onStart1v1={(botName) => {
-              if (!player) return;
-              const bot = botManager.members().find((b) => b.name === botName);
-              if (!bot) return;
-              setBattleResult(null);
-              // Arena 1v1: consume 1 de energia arena1v1
-              const energy = player.energy ?? { tower: 8, arena1v1: 2, arenaTourney: 1, lastReset: "" };
-              if (energy.arena1v1 <= 0) return;
-              const next = { ...player, energy: { ...energy, arena1v1: energy.arena1v1 - 1 } };
-              setPlayer(next);
-              void savePlayer(next);
-              setBattle(startGrindBattle(next, next.tower.floor));
-            }}
-            onStartTournament={() => {
-              if (!player) return;
-              const energy = player.energy ?? { tower: 8, arena1v1: 2, arenaTourney: 1, lastReset: "" };
-              if (energy.arenaTourney <= 0) return;
-              const next = { ...player, energy: { ...energy, arenaTourney: energy.arenaTourney - 1 } };
-              setPlayer(next);
-              void savePlayer(next);
-              setBattle(startGrindBattle(next, Math.max(3, next.tower.floor)));
-            }}
+            tourney={tourney}
+            onStart1v1={handleStart1v1}
+            onStartTournament={handleStartTournament}
           />
         ) : (
           <PartyPanel
