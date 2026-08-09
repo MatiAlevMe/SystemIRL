@@ -11,12 +11,12 @@
 - [x] Definir idea (Sistema IRL — Solo Leveling para la vida real)
 - [x] Crear repo público `MatiAlevMe/SystemIRL`
 - [x] Implementar MVP (scaffold + core: quests IA, XP/niveles, party en vivo)
-- [ ] Live deploy a Vercel (`https://systemirl.vercel.app`) ← **ahora**
-- [ ] Configurar keys en Vercel (ver abajo)
-- [ ] Verificar party en vivo con 2 pestañas
-- [ ] Crear pitch (≤280 caracteres) — draft listo en README
+- [x] Live deploy a Vercel (`https://system-irl.vercel.app`) — ✅ verificado en vivo
+- [x] Configurar keys en Vercel (publishable + secret + Gemini) ✅
+- [ ] Verificar party en vivo con 2 pestañas (pendiente, para la demo)
+- [x] Crear pitch (≤280 caracteres) — draft en README
 - [ ] Grabar demo (≤1:30) y subir a YouTube público — guion en `docs/DEMO.md`
-- [ ] README con explicación de Portal — ✅ listo
+- [x] README con explicación de Portal
 - [ ] Completar formulario de entrega (nombre equipo, Discord, pitch, URL live, URL demo, URL repo, explicación Portal)
 
 ## Línea de tiempo de construcción
@@ -28,8 +28,8 @@
 | 2. Motor (completar → XP/niveles/stats/streak/IndexedDB) | ✅ | `feat/core` |
 | 3. Party en vivo (canal, presencia, leaderboard, notificaciones) | ✅ | `feat/core` |
 | 4. Polish demo (animaciones, level-up modal, flujo 2 pestañas) | ✅ | `feat/core` |
-| 5. Deploy Vercel + config Portal | ⏳ | importar repo + env vars |
-| 6. Entregables (README, pitch, video, formulario) | 🔜 | docs listas, falta video |
+| 5. Deploy Vercel + config Portal | ✅ | live en `system-irl.vercel.app`, config desplegada |
+| 6. Entregables (README, pitch, video, formulario) | 🔜 | docs listas, falta video + formulario |
 
 ## Pasos manuales que debes hacer tú
 
@@ -46,8 +46,9 @@
 2. Vercel detecta Vite solo. No cambies el build por defecto.
 3. **Environment Variables** (Settings → Environment Variables, o al importar):
    - `VITE_PORTAL_PUBLISHABLE_KEY` = tu `pk_...`
-   - `GEMINI_API_KEY` = tu key de Gemini
+   - `GEMINI_API_KEY` = tu key de Gemini (o `KILO_API_KEY` / `ZEN_API_KEY` como alternativas)
    - `PORTAL_SECRET` = tu `sk_...` (opcional)
+   - `QUEST_PROVIDER` = `auto` (default: usa el primero que tenga key)
 4. **Deploy**. En ~1 min queda live. Cada push a `main` re-despliega.
 
 ### 4. Desplegar config de Portal (opcional)
@@ -65,8 +66,13 @@ Los canales `party-*` ya aceptan anónimos por defecto, así que no es bloqueant
 4. En A completa una quest → en B deberías ver el feed y el leaderboard actualizarse **sin recargar**.
 5. Completa varias quests en A hasta subir de nivel → el modal aparece y B ve el ⚡ level-up.
 
-## Siguiente iteración (si sobra tiempo, en orden de impacto)
-- [ ] Tokens identificados vía `/api/portal-token` (nombres reales en presencia).
-- [ ] Notificaciones push (inbox de Portal) cuando alguien sube de nivel.
-- [ ] PWA instalable (manifest + service worker, como FireGuard).
+## Backlog — demo boosters (en orden de impacto, para la demo)
+- [ ] **God mode / Demo panel** (dev-only, nunca visible en producción): spawn de bots en la party (presencia fake + mensajes `join`/`done`/`levelup`), avanzar día (streak + quests nuevas), forzar level-up y forzar provider de IA. → la demo se vuelve autónoma y controlada en el video, sin depender de otra persona ni de 2 pestañas coordinadas.
+- [ ] **Shop demo**: gastar XP en títulos/colores de perfil (cierra el loop de progresión y da qué mostrar).
+- [ ] **Tokens identificados**: conectar `/api/portal-token` (ya mintéa tokens) → presencia con nombres reales.
 - [ ] Más stats/desbloqueos visuales por nivel.
+
+## Post-hackathon (ver planning/docs/sistema-irl.md)
+- Notificaciones push (inbox de Portal) cuando alguien sube de nivel.
+- PWA instalable (manifest + service worker, como FireGuard).
+- Leaderboards semanales, módulos finanzas/hábitos.
