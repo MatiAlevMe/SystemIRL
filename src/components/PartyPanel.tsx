@@ -240,8 +240,8 @@ export default function PartyPanel({
                   </span>
                 </div>
                 <div className="raid-actions">
-                  <button className="primary-btn" onClick={onFightRaid}>
-                    ⚔ Luchar vs jefe de raid
+                  <button className="primary-btn" onClick={onFightRaid} disabled={raidDead}>
+                    {raidDead ? "✓ Jefe de Raid Derrotado" : "⚔ Luchar vs jefe de raid"}
                   </button>
                   {raidDead &&
                     (raidClaimed ? (
@@ -253,8 +253,7 @@ export default function PartyPanel({
                     ))}
                 </div>
                 <p className="panel-note">
-                  El daño al jefe viene de tus batallas de raid (se comparte en vivo). La meta semanal no golpea al
-                  jefe por ahora.
+                  El daño al jefe se logra combatiendo en la raid y completando tu meta diaria. El ciclo semanal se reinicia cada lunes.
                 </p>
               </div>
             </div>
