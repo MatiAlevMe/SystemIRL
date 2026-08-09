@@ -65,13 +65,13 @@ El canónico con comentarios es `.env.template`.
 3. **Mensajes** `done`/`levelup`/`join`/`raid` → feed de actividad en vivo.
 4. **Sin infra propia**: el realtime, presencia, historial y orden los maneja Portal; el "backend" son 2 serverless de Vercel.
 
-- **Post-MVP (Refinamientos & Endgame)**:
-  - **Fase 1 (Agilidad y Turnos)**: Motor por turnos ATB-lite basado en `agility`, tope de velocidad de bosses (1.4×) y equipamiento de Botas.
-  - **Fase 2 (EX 99 & Raid Skill)**: Escalado de habilidad EX hasta nivel 99 e hitos pasivos (10/25/50/75/99). Sistema de Raid Skills (L1-LMAX/Suprema) por clase.
+- **Post-MVP (Refinamientos & Endgame — implementados)**:
+  - **Fase 1 (Agilidad y Turnos)**: Motor por turnos ATB-lite basado en `agility`: la ronda intercala bots y enemigos por agilidad (tope de velocidad de bosses 1.4× el aliado vivo más lento), strip de orden en el BattleModal y equipamiento de Botas.
+  - **Fase 2 (EX 99 & Raid Skill)**: Escalado de habilidad EX hasta nivel 99 (+3%/nivel, hitos 10/25/75). Sistema de Raid Skills por clase (niveles 1–5, activas desde L2, pasivas en combate).
   - **Fase 3 (Pociones % & Títulos)**: Pociones de restauración porcentual en combate y títulos equipables con pasivas de XP, oro, ataque y defensa.
-  - **Fase 4 (Torre Procedural)**: Torre de 100+ pisos generados procedimentalmente con escalado infinito y recompensas acumulativas.
+  - **Fase 4 (Torre Procedural)**: Torre de 100+ pisos generados procedimentalmente con escalado infinito y recompensas acumulativas (grind 1 ⚡ / jefe 2 ⚡).
   - **Fase 5 (Elementos & Gemas)**: Hechizos filtrados por elementos desbloqueados mediante Gemas Elementales en la tienda.
-  - **Fase 6 (Raid Semanal ISO)**: Ciclo semanal atado a la semana calendario ISO (lunes-domingo). Botón de combate deshabilitado tras la derrota del jefe y meta diaria con daño pasivo porcentual acotado por tier.
-  - **Fase 7 (Quests 6/día)**: Grilla de 6 quests diarias y regeneración que preserva únicamente las quests no completadas.
-  - **Fase 8 (Arena de Entrenamiento)**: Pestaña de Arena para duelos 1v1 (2 energía/día) y Torneo de 16 gladiadores (1 energía/día).
+  - **Fase 6 (Raid Semanal ISO)**: Ciclo semanal atado a la semana calendario ISO (lunes-domingo). Jefes por tier (T1: 1200 → T5: 5000 HP) desbloqueados por la Raid Skill; botón deshabilitado tras la derrota del jefe y meta diaria con daño pasivo porcentual acotado por tier (cap acumulado).
+  - **Fase 7 (Quests 6/día)**: Grilla de 6 quests diarias y regeneración que preserva únicamente las quests no completadas (clamped a 6).
+  - **Fase 8 (Arena de Entrenamiento)**: Pestaña de Arena con **duelos 1v1 reales** contra el bot seleccionado (2 energía/día) y **Torneo de 16 gladiadores** con bracket: el match del jugador es un combate real y el resto se simula (1 energía/día).
 - Detalles y próximos pasos en `docs/ROADMAP.md`.

@@ -18,7 +18,7 @@ Proyecto para **The Realtime Hackathon by Portal** (7–9 ago 2026). Equipo **Ra
 - **Clases y evolución**: elige clase (Guerrero/Guardia/Sabio/Cazador), cambiala en el shop, y evoluciona. Cada clase tiene **agilidad propia**, **Raid Skill** exclusiva (pasiva global + activa) y elemento de magia predeterminado.
 - **Shop**: gastá tu oro en títulos (con pasivas de XP/oro/ataque), colores, armas, armaduras, reliquias, **pociones porcentuales** (cura 30% HP) y auras de raid. Lo que equipás se ve en el perfil y el leaderboard.
 - **Party en vivo (Portal)**: únete a un canal de party y ve en tiempo real quién está online, el leaderboard de niveles, la actividad de tus amigos y la **raid semanal**: un jefe con HP compartido entre toda la party.
-- **Raid semanal ISO (lunes–domingo)**: jefe con 500 HP grupales. Se reinicia cada semana ISO. El botón de pelea se **deshabilita tras derrotarlo** hasta el próximo lunes. Completar la meta diaria (ej: "10.000 pasos") hace **3.5% de daño porcentual** al jefe (1×/jugador/día; cap máx de daño pasivo por tier de dificultad).
+- **Raid semanal ISO (lunes–domingo)**: jefes por tier (T1: 1200 HP → T5: 5000 HP) con HP compartido. Se reinicia cada semana ISO; el tier máximo disponible lo desbloquea tu **Raid Skill**. El botón de pelea se **deshabilita tras derrotarlo** hasta el próximo lunes. Completar la meta diaria hace **3.5% de daño porcentual** al jefe (1×/jugador/día; cap de daño pasivo acumulado por tier).
 - **La Torre del Sistema (100+ pisos)**: generación procedural infinita con escalado de dificultad, recompensas acumulativas y jefes únicos.
 - **Arena de Entrenamiento**: combates 1v1 (2/día) y Torneo de 16 participantes (1/día) contra bots de la party.
 
@@ -140,7 +140,7 @@ ZEN_API_KEY=...               # (opcional) OpenCode Zen free (big-pickle, deepse
 
 ## 📋 Entregables
 
-- **Pitch (280):** *"Tu vida real convertida en RPG: un agente de IA te asigna quests diarias de entrenamiento, hábitos y finanzas. Completá misiones, derrotá monstruos, subí de nivel y tu party lo celebra en vivo con Portal. IA + tiempo real, sin infraestructura."*
+- **Pitch (280):** *"Tu vida real convertida en RPG: un agente de IA te asigna quests diarias de entrenamiento y hábitos. Completá misiones, derrotá monstruos, subí de nivel y tu party lo celebra en vivo con Portal. IA + tiempo real, sin infraestructura."*
 - **Demo (1:30):** [enlace] — ver guion en [`docs/DEMO.md`](docs/DEMO.md)
 
 ## 🔗 Enlaces

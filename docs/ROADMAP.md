@@ -33,6 +33,7 @@
 | 7. Post-MVP: God Mode + bots, 5 quests, toasts, raid grupal, combate, shop, torre, sonido | ✅ | commits `feat(demo/quests/party/rpg/shop/tower/ux)` |
 | 8. Post-MVP v2: combate táctico por turnos, clases/EX/evolución, Personaje, raid boss con HP compartido, shop ampliado, prefs (intereses, regenerar, rango) | ✅ | commits `feat(rpg)` + `feat(prefs)` |
 | 9. Refinamientos & Endgame v3: Fases 1–9 completadas (agilidad, turn order ATB-lite, EX 99, Raid Skills, Torre procedural 100+, elementos/gemas, ciclo semanal ISO de raids con deshabilitación tras victoria, daño porcentual de meta diaria, 6 quests/día y Arena 1v1/Torneo) | ✅ | commits `feat(rpg/catalog/tower/elements/raid/arena)` |
+| 10. Alineación final (Tier 1–3): features "declaradas" ahora realmente conectadas — EX escala real, títulos con pasiva, elementos/gemas, energía de Torre, regenerar ≤6, stats por tiers, Raid Skills y raids por tier, turn order por agilidad real y Arena con duelo/torneo reales | ✅ | commits Tier 1 (9566ffa), Tier 2 (082439b), Tier 3 (da09782) |
 
 ## Pasos manuales que debes hacer tú
 
@@ -80,12 +81,12 @@ Los canales `party-*` ya aceptan anónimos por defecto, así que no es bloqueant
 - [x] **RPG layer v2 — combate táctico ATB-lite**: combate por turnos con orden por **agilidad** (cap 1.4× del aliado más lento para bosses), debilidades ocultas por raza (ONE MORE), MP con regen, gauge EX por clase hasta **nivel 99** (+3%/nivel), evolución, HP persistente entre peleas.
 - [x] **Clases**: 4 clases con pasivas, agilidad base, cambio de clase en el shop (1000 + nivel×200), pestaña Personaje con stats base/derivadas + equipo + hechizos. Cada clase tiene una **Raid Skill** exclusiva (pasiva global + habilidad activa).
 - [x] **Shop ampliado**: armaduras, reliquias (crítico/MP/ambición/cazador), **pociones porcentuales** (cura 30% del HP máximo, usables en combate), títulos con pasivas de XP/oro/ataque/defensa y auras de raid.
-- [x] **Raid semanal con ciclo ISO (lunes–domingo)**: jefe de 500 HP grupales. El botón se deshabilita tras derrotarlo hasta el próximo lunes. Completar la meta diaria hace **3.5% de daño porcentual** (no entero) al jefe (1×/jugador/día). Cap de daño pasivo según tier (R1-R4: 50%, R5: 25%, MAX: 15%).
+- [x] **Raid semanal con ciclo ISO (lunes–domingo)**: jefes por tier (T1: 1200 HP → T5: 5000 HP, desbloqueados por la Raid Skill). El botón se deshabilita tras derrotarlo hasta el próximo lunes. Completar la meta diaria hace **3.5% de daño porcentual** (no entero) al jefe (1×/jugador/día). Cap de daño pasivo acumulado según tier (R1-R4: 50%, R5: 25%).
 - [x] **Prefs de personalización**: 8 intereses (chips 2-3) en onboarding → viajan al prompt de la IA; botón **Regenerar** (2/día, preserva completadas) y Bajar rango; guardrail de seguridad en el prompt; reliquia de la Ambición sube el rango.
 - [x] **La Torre del Sistema (100+ pisos)**: generación procedural infinita con escalado de HP/recompensas, pool de nombres y bosses cíclicos, piso ≥ 5 desbloquea mayor dificultad.
 - [x] **Elementos y Gemas**: hechizos filtrados por los elementos desbloqueados del jugador. Gemas disponibles en el shop para desbloquear nuevos elementos.
 - [x] **6 quests/día** (antes 3, luego 5): skeleton loading para las 6 cards, feed en vivo con toasts en cualquier pestaña, sonido WebAudio, copiar código de party, +XP flotante.
-- [x] **Arena de Entrenamiento**: pestaña dedicada con duelos 1v1 (2 energía/día) y Torneo de 16 participantes (1 energía/día). Energía se reinicia cada día automáticamente.
+- [x] **Arena de Entrenamiento**: pestaña dedicada con **duelos 1v1 reales** contra el bot seleccionado (2 energía/día) y **Torneo de 16 gladiadores** con bracket y combates por turnos reales en cada ronda (1 energía/día). Energía se reinicia cada día automáticamente.
 
 ## Post-hackathon (ver planning/docs/sistema-irl.md)
 - [ ] **Tokens identificados**: conectar `/api/portal-token` (ya mintéa tokens, `PORTAL_SECRET` configurado) → presencia con identidad verificada y anti-suplantación. No aporta al video (los nombres ya salen vía metadata), por eso quedó fuera del sprint de la demo.
