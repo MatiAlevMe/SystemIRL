@@ -13,10 +13,10 @@
 - [x] Implementar MVP (scaffold + core: quests IA, XP/niveles, party en vivo)
 - [x] Live deploy a Vercel (`https://system-irl.vercel.app`) — ✅ verificado en vivo
 - [x] Configurar keys en Vercel (publishable + secret + Gemini) ✅
-- [ ] Verificar party en vivo con 2 pestañas (pendiente, para la demo)
+- [x] Party en vivo verificada (con bots del God Mode + 2 pestañas)
 - [x] Crear pitch (≤280 caracteres) — draft en README
 - [ ] Grabar demo (≤1:30) y subir a YouTube público — guion en `docs/DEMO.md`
-- [x] README con explicación de Portal
+- [x] README con explicación de Portal (+ snippet real y diagrama del flujo)
 - [ ] Completar formulario de entrega (nombre equipo, Discord, pitch, URL live, URL demo, URL repo, explicación Portal)
 
 ## Línea de tiempo de construcción
@@ -30,6 +30,7 @@
 | 4. Polish demo (animaciones, level-up modal, flujo 2 pestañas) | ✅ | `feat/core` |
 | 5. Deploy Vercel + config Portal | ✅ | live en `system-irl.vercel.app`, config desplegada |
 | 6. Entregables (README, pitch, video, formulario) | 🔜 | docs listas, falta video + formulario |
+| 7. Post-MVP: God Mode + bots, 5 quests, toasts, raid grupal, combate, shop, torre, sonido | ✅ | commits `feat(demo/quests/party/rpg/shop/tower/ux)` |
 
 ## Pasos manuales que debes hacer tú
 
@@ -59,20 +60,25 @@ npm run portal:deploy
 ```
 Los canales `party-*` ya aceptan anónimos por defecto, así que no es bloqueante.
 
-### 5. Probar la demo en vivo
-1. Abre https://systemirl.vercel.app en **dos pestañas/ventanas**.
-2. En cada una pon un nombre distinto (pestaña A: `Sung`, pestaña B: `Jinwoo`).
-3. En ambas, **Party → código `RAGNAROK` → Entrar**.
-4. En A completa una quest → en B deberías ver el feed y el leaderboard actualizarse **sin recargar**.
-5. Completa varias quests en A hasta subir de nivel → el modal aparece y B ve el ⚡ level-up.
+### 5. Probar la demo en vivo (ahora con God Mode)
+1. Abre `https://system-irl.vercel.app/#demo` (el `#demo` activa el panel de demo).
+2. Crea tu jugador y entra a una party con el código `RAGNAROK`.
+3. En el panel **GOD MODE** (abajo a la derecha):
+   - **Spawn bots** → Jinwoo y Cha entran con presencia real al leaderboard.
+   - **Bot quest / Bot level-up / Bot raid** → llenan el feed en vivo (verás los toasts desde la pestaña Quests).
+   - **+60 XP / Subir nivel / +500 oro / Nuevo día** → controlás la progresión del video.
+   - **Victoria forzada / Hechizo garantizado** → el combate siempre sale espectacular.
+   - **Golpear jefe / Piso 2 / Piso 5** → controlás La Torre.
 
-## Backlog — demo boosters (en orden de impacto, para la demo)
-- [ ] **God mode / Demo panel** (dev-only, nunca visible en producción): spawn de bots en la party (presencia fake + mensajes `join`/`done`/`levelup`), avanzar día (streak + quests nuevas), forzar level-up y forzar provider de IA. → la demo se vuelve autónoma y controlada en el video, sin depender de otra persona ni de 2 pestañas coordinadas.
-- [ ] **Shop demo**: gastar XP en títulos/colores de perfil (cierra el loop de progresión y da qué mostrar).
-- [ ] **Tokens identificados**: conectar `/api/portal-token` (ya mintéa tokens) → presencia con nombres reales.
-- [ ] Más stats/desbloqueos visuales por nivel.
+## Backlog — demo boosters (hechos en el post-MVP)
+- [x] **God mode / Demo panel** (`#demo`): bots con presencia real (clientes de Portal propios), +XP, level-up, oro, streak, nuevo día, provider forzado, combate forzado y control de la Torre. → la demo es autónoma y reproducible en video.
+- [x] **RPG layer**: combate + monstruos por dificultad + hechizos + loot (oro y drops de armas).
+- [x] **Shop demo**: títulos/colores/armas con bonos; equipamiento visible en perfil y leaderboard.
+- [x] **La Torre del Sistema**: 5 pisos con jefes, daño por quests, recompensas y piso final.
+- [x] **5 quests/día** (antes 3), skeleton loading, feed en vivo con toasts en cualquier pestaña, raid con progreso grupal, sonido WebAudio, copiar código de party, +XP flotante.
 
 ## Post-hackathon (ver planning/docs/sistema-irl.md)
-- Notificaciones push (inbox de Portal) cuando alguien sube de nivel.
-- PWA instalable (manifest + service worker, como FireGuard).
-- Leaderboards semanales, módulos finanzas/hábitos.
+- [ ] **Tokens identificados**: conectar `/api/portal-token` (ya mintéa tokens, `PORTAL_SECRET` configurado) → presencia con identidad verificada y anti-suplantación. No aporta al video (los nombres ya salen vía metadata), por eso quedó fuera del sprint de la demo.
+- [ ] Notificaciones push (inbox de Portal) cuando alguien sube de nivel.
+- [ ] PWA instalable (manifest + service worker, como FireGuard).
+- [ ] Leaderboards semanales, módulos finanzas/hábitos, shop curado con IA.

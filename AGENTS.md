@@ -66,4 +66,5 @@ El canónico con comentarios es `.env.template`.
 
 ## Estado actual
 - MVP live y verificado en producción (quests IA, portal-token, canales party desplegados).
+- **Post-MVP (sprint demo)**: God Mode con bots (URL `#demo`), 5 quests/día, combate+hechizos+loot (`src/lib/rpg.ts`), shop fijo (`src/lib/catalog.ts`), Torre del Sistema, raid grupal, toasts de feed, sonido WebAudio. `PlayerState` se normaliza al cargar (`normalizePlayer` en `src/lib/storage.ts`): los datos viejos de IndexedDB nunca rompen.
 - Detalles y próximos pasos en `docs/ROADMAP.md`.

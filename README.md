@@ -13,19 +13,48 @@ Proyecto para **The Realtime Hackathon by Portal** (7–9 ago 2026). Equipo **Ra
 
 ## 🎮 Qué hace
 
-- **Quests diarias con IA**: El Sistema genera cada día 3 quests personalizadas (Gemini) según tu historial, nivel y racha. Si la API falla, hay fallback offline.
-- **XP, niveles y stats**: Completar quests suma XP a 4 stats (Strength, Intelligence, Vitality, Gold), sube tu nivel y mantiene una racha (streak) diaria.
-- **Party en vivo (Portal)**: únete a un canal de party y ve en tiempo real quién está online, el leaderboard de niveles y la actividad de tus amigos. Cuando alguien sube de nivel, toda la party lo ve al instante.
-- **Raid semanal**: un objetivo grupal que cualquiera puede completar y se celebra en vivo.
+- **Quests diarias con IA**: El Sistema genera cada día 5 quests personalizadas (Gemini, con fallback a Kilo/Zen y a un pool offline) según tu historial, nivel y racha.
+- **XP, niveles, stats y RPG**: Completar quests dispara un **combate** contra un monstruo escalado a la dificultad (daño según tus stats y tu arma). La victoria da **oro**, a veces dropea armas, y cada quest daña al jefe de tu piso en **La Torre del Sistema**.
+- **Shop**: gastá tu oro en títulos, colores de perfil y armas que potencian tu daño y tu XP. Lo que equipás se ve en tu perfil y en el leaderboard de la party.
+- **Party en vivo (Portal)**: únete a un canal de party y ve en tiempo real quién está online, el leaderboard de niveles, la actividad de tus amigos (incluso como toasts desde cualquier pestaña) y la **raid semanal** con progreso grupal.
+- **Raid semanal**: un objetivo grupal con barra de progreso compartida; cuando alguien la completa, toda la party lo ve y el contador sube en vivo.
 
 ## 🔮 Cómo se usó Portal (requisito de entrega)
 
-Portal es el corazón del modo multiplayer:
+Portal es el corazón del modo multiplayer. Todo lo que se ve en vivo —presencia, feed, toasts, raid grupal— corre sobre un canal de Portal por party:
 
-1. **Canales en tiempo real** — Cada party es un canal `party-<código>` (definido en [`portal.config.ts`](portal.config.ts)). Todos los miembros comparten un stream secuenciado de mensajes a través de un único WebSocket, manejado por el SDK `@portalsdk/react` (`useChannel`).
-2. **Presencia** — Cada sesión publica su identidad como *presence metadata* (`{ name, level, xp, streak }` vía `setMetadata`). El **leaderboard se arma solo**: la app agrupa a los participantes presentes y los ordena por nivel/XP, sin backend y sin recargar. Al cerrar la pestaña, el jugador desaparece en vivo.
-3. **Notificaciones de nivel en tiempo real** — Cuando completas una quest, tu cliente publica un mensaje `done`/`levelup` al canal; los demás miembros lo reciben y el feed de actividad lo anima al instante (nivel, raid, joins).
-4. **Escalable sin infraestructura** — No hay servidor propio: el realtime, la presencia, el historial y el orden de mensajes los maneja la plataforma de Portal. Nuestro "backend" son dos serverless functions de Vercel (una para mintear la identidad si quisiéramos, otra para generar quests con Gemini).
+1. **Canales en tiempo real** — Cada party es un canal `party-<código>` (definido en [`portal.config.ts`](portal.config.ts)). Todos los miembros comparten un stream secuenciado de mensajes a través de un único WebSocket, manejado por `@portalsdk/react`:
+
+   ```tsx
+   // App.tsx — un solo hook conecta toda la sala
+   const party = useChannel<PartyMessage>({
+     channelId: partyCode ? `party-${partyCode}` : undefined,
+     history: 40,
+   });
+
+   // Publicar actividad de la party (sin backend)
+   void party.send({ content: { kind: "done", name, quest: q.title } });
+   ```
+
+2. **Presencia → leaderboard sin servidor** — Cada sesión publica su identidad como *presence metadata* con `setMetadata({ name, level, xp, streak, title, color })`. El leaderboard **se arma solo**: agrupa a los participantes presentes y los ordena por nivel/XP. Al cerrar la pestaña, el jugador desaparece en vivo.
+
+   ```tsx
+   party.setMetadata({ name: player.name, level, xp: player.xp, streak: player.streak });
+   ```
+
+3. **Notificaciones en tiempo real** — Completar una quest publica `done`/`levelup` al canal; la party lo recibe y lo muestra como toast desde cualquier pestaña, además del feed de actividad (nivel, raid, joins, bots de la demo).
+
+4. **Raid con progreso grupal** — los mensajes `raid` del canal se agrupan por nombre y semana: cada miembro ve cuántos jugadores ya completaron la raid y la barra de progreso avanza en vivo.
+
+5. **Escalable sin infraestructura** — No hay servidor propio: el realtime, la presencia, el historial y el orden de mensajes los maneja la plataforma de Portal. Nuestro "backend" son dos serverless functions de Vercel (una para mintear la identidad si quisiéramos, otra para generar quests con IA).
+
+```
+flujo realtime (sin backend propio):
+  jugador ──setMetadata──▶ canal party-<código> ──▶ leaderboard (presencia)
+  jugador ──send(done/levelup/raid)──▶ canal      ──▶ feed + toasts en la party
+```
+
+> **God mode (demo)**: con `#demo` al final de la URL se activa un panel de demo con bots de party (clientes de Portal propios, con presencia real), +XP, level-up forzado, oro, control de la Torre y toggles de combate. Ideal para grabar el video sin depender de otra persona.
 
 ## 🛠️ Stack
 
@@ -34,7 +63,8 @@ Portal es el corazón del modo multiplayer:
 | Frontend | React 19 + Vite 8 + TypeScript (strict) |
 | Tiempo real | **Portal** (`@portalsdk/core` + `@portalsdk/react`) |
 | IA | Gemini / Kilo Gateway / OpenCode Zen (cualquiera con key; fallback offline) |
-| Persistencia | IndexedDB (`idb-keyval`) — perfil, XP, quests del día |
+| RPG | Combate + loot + shop + La Torre (client-side, sin assets) |
+| Persistencia | IndexedDB (`idb-keyval`) — perfil, XP, quests del día, items, torre |
 | Deploy | Vercel (SPA + serverless functions `api/*.ts`) |
 
 ## ⚙️ Setup local
@@ -94,10 +124,11 @@ ZEN_API_KEY=...               # (opcional) OpenCode Zen free (big-pickle, deepse
 │   ├── quests.ts         # Gemini: genera quests personalizadas (+ fallback)
 │   └── portal-token.ts   # (opcional) mintéa identidad identificada con sk_
 ├── src/
-│   ├── App.tsx           # orquestación: jugador, quests, party, modal level-up
+│   ├── App.tsx           # orquestación: jugador, quests, party, combate, modales
 │   ├── portal.ts         # cliente Portal (publishable key)
-│   ├── lib/              # XP/niveles, IndexedDB, generación de quests
-│   └── components/       # Onboarding, QuestList, StatsPanel, PartyPanel, LevelUp
+│   ├── lib/              # XP/niveles, IndexedDB, quests, combate, shop, torre, sonido, bots
+│   └── components/       # Onboarding, QuestList, StatsPanel, PartyPanel, ShopPanel,
+│                         # TowerPanel, CombatModal, LevelUp, DemoPanel (god mode)
 ├── portal.config.ts      # canales party-* (Portal)
 └── docs/
     └── ROADMAP.md        # plan de ejecución + entregables
@@ -105,7 +136,7 @@ ZEN_API_KEY=...               # (opcional) OpenCode Zen free (big-pickle, deepse
 
 ## 📋 Entregables
 
-- **Pitch (280):** *"El Sistema convierte tu vida real en un RPG: un agente de IA te asigna quests diarias de entrenamiento, hábitos y finanzas; ganas XP, subes de nivel y tu party lo ve en vivo. IA + tiempo real con Portal."*
+- **Pitch (280):** *"Tu vida real convertida en RPG: un agente de IA te asigna quests diarias de entrenamiento, hábitos y finanzas. Completá misiones, derrotá monstruos, subí de nivel y tu party lo celebra en vivo con Portal. IA + tiempo real, sin infraestructura."*
 - **Demo (1:30):** [enlace] — ver guion en [`docs/DEMO.md`](docs/DEMO.md)
 
 ## 🔗 Enlaces
