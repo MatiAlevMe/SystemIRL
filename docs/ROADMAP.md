@@ -75,15 +75,17 @@ Los canales `party-*` ya aceptan anónimos por defecto, así que no es bloqueant
    - **Forzar rango: F / B** → genera quests de dificultad extrema para la demo.
 
 ## Backlog — demo boosters (hechos en el post-MVP)
-- [x] **God mode / Demo panel** (`#demo`): bots con presencia real (clientes de Portal propios), +XP, level-up, oro, streak, nuevo día, provider forzado, control de la Torre, autopilot de quests, forzar rango, revelar debilidades y reset total. → la demo es autónoma y reproducible en video.
+- [x] **God mode / Demo panel** (`#demo`): bots con presencia real (clientes de Portal propios), +XP, level-up, oro, streak, nuevo día, provider forzado, control de la Torre, autopilot de quests, forzar rango, revelar debilidades, **recargar energías** y reset total. → la demo es autónoma y reproducible en video.
 - [x] **RPG layer v1**: combate + monstruos por dificultad + hechizos + loot (oro y drops de armas).
-- [x] **RPG layer v2 (combate táctico)**: combate por turnos (atacar/hechizo/defender/ítem/EX/huir), debilidades ocultas por raza (ONE MORE), MP con regen, gauge EX por clase, evolución, HP persistente entre peleas (las quests curan, el level-up restaura).
-- [x] **Clases**: 4 clases con pasivas, cambio de clase en el shop (1000 + nivel×200), pestaña Personaje con stats base/derivadas + equipo + hechizos.
-- [x] **Shop ampliado**: armaduras, reliquias (crítico/MP/ambición/cazador), pociones (inventario con usos) y auras de raid.
-- [x] **Raid semanal con jefe de HP compartido**: mensajes `raidHit` = estado del jefe, derrota = 1 HP con regeneración del jefe, recompensa aura solo contribuyentes.
-- [x] **Prefs de personalización**: 8 intereses (chips 2-3) en onboarding → viajan al prompt de la IA; botón **Regenerar** (2/día) y **Bajar rango**; guardrail de seguridad en el prompt; reliquia de la Ambición sube el rango.
-- [x] **La Torre del Sistema**: 5 pisos con jefes, daño por quests, recompensas y piso final.
-- [x] **5 quests/día** (antes 3), skeleton loading, feed en vivo con toasts en cualquier pestaña, sonido WebAudio, copiar código de party, +XP flotante.
+- [x] **RPG layer v2 — combate táctico ATB-lite**: combate por turnos con orden por **agilidad** (cap 1.4× del aliado más lento para bosses), debilidades ocultas por raza (ONE MORE), MP con regen, gauge EX por clase hasta **nivel 99** (+3%/nivel), evolución, HP persistente entre peleas.
+- [x] **Clases**: 4 clases con pasivas, agilidad base, cambio de clase en el shop (1000 + nivel×200), pestaña Personaje con stats base/derivadas + equipo + hechizos. Cada clase tiene una **Raid Skill** exclusiva (pasiva global + habilidad activa).
+- [x] **Shop ampliado**: armaduras, reliquias (crítico/MP/ambición/cazador), **pociones porcentuales** (cura 30% del HP máximo, usables en combate), títulos con pasivas de XP/oro/ataque/defensa y auras de raid.
+- [x] **Raid semanal con ciclo ISO (lunes–domingo)**: jefe de 500 HP grupales. El botón se deshabilita tras derrotarlo hasta el próximo lunes. Completar la meta diaria hace **3.5% de daño porcentual** (no entero) al jefe (1×/jugador/día). Cap de daño pasivo según tier (R1-R4: 50%, R5: 25%, MAX: 15%).
+- [x] **Prefs de personalización**: 8 intereses (chips 2-3) en onboarding → viajan al prompt de la IA; botón **Regenerar** (2/día, preserva completadas) y Bajar rango; guardrail de seguridad en el prompt; reliquia de la Ambición sube el rango.
+- [x] **La Torre del Sistema (100+ pisos)**: generación procedural infinita con escalado de HP/recompensas, pool de nombres y bosses cíclicos, piso ≥ 5 desbloquea mayor dificultad.
+- [x] **Elementos y Gemas**: hechizos filtrados por los elementos desbloqueados del jugador. Gemas disponibles en el shop para desbloquear nuevos elementos.
+- [x] **6 quests/día** (antes 3, luego 5): skeleton loading para las 6 cards, feed en vivo con toasts en cualquier pestaña, sonido WebAudio, copiar código de party, +XP flotante.
+- [x] **Arena de Entrenamiento**: pestaña dedicada con duelos 1v1 (2 energía/día) y Torneo de 16 participantes (1 energía/día). Energía se reinicia cada día automáticamente.
 
 ## Post-hackathon (ver planning/docs/sistema-irl.md)
 - [ ] **Tokens identificados**: conectar `/api/portal-token` (ya mintéa tokens, `PORTAL_SECRET` configurado) → presencia con identidad verificada y anti-suplantación. No aporta al video (los nombres ya salen vía metadata), por eso quedó fuera del sprint de la demo.

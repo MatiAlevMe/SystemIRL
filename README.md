@@ -13,12 +13,14 @@ Proyecto para **The Realtime Hackathon by Portal** (7–9 ago 2026). Equipo **Ra
 
 ## 🎮 Qué hace
 
-- **Quests diarias con IA**: El Sistema genera cada día 5 quests personalizadas (Gemini, con fallback a Kilo/Zen y a un pool offline). En el onboarding eliges **intereses** (gimnasio, lectura, finanzas…) y las quests se alinean a ellos; puedes **regenerar** hasta 2 veces por día o **bajar el rango** de dificultad.
-- **RPG con combate táctico**: Completar quests dispara un **combate por turnos** contra un monstruo escalado a la dificultad. Atacas, lanzas hechizos (elementos con debilidades ocultas → ONE MORE), defiendes, gastas MP y EX. La victoria da **oro**, a veces dropea armas, y cada quest daña al jefe de tu piso en **La Torre del Sistema**.
-- **Clases y evolución**: elige clase (Guerrero/Guardia/Sabio/Cazador), cambiala en el shop cuando quieras, y tu clase **evoluciona** al nivel 5 o al piso 4.
-- **Shop**: gastá tu oro en títulos, colores, armas, **armaduras, reliquias y pociones** (usables en combate). Lo que equipás se ve en tu perfil y en el leaderboard de la party. Las auras exclusivas se ganan derrotando la raid.
-- **Party en vivo (Portal)**: únete a un canal de party y ve en tiempo real quién está online, el leaderboard de niveles, la actividad de tus amigos (incluso como toasts desde cualquier pestaña) y la **raid semanal**: un jefe con HP compartido entre toda la party.
-- **Raid semanal**: un jefe de raid con barra de HP grupal — cada golpe se propaga en vivo (mensajes = estado) y la recompensa (aura) es solo para quienes contribuyeron.
+- **Quests diarias con IA (6/día)**: El Sistema genera cada día **6 quests** personalizadas (Gemini, con fallback a Kilo/Zen y a un pool offline). En el onboarding eliges **intereses** (gimnasio, lectura, finanzas…) y las quests se alinean a ellos; puedes **regenerar** hasta 2 veces por día (preserva las ya completadas) o bajar el rango de dificultad.
+- **RPG con combate táctico ATB-lite**: Completar quests dispara un **combate por turnos** con orden por agilidad. Atacas, lanzas hechizos (elementos con debilidades ocultas → ONE MORE), defiendes, gastas MP y acumulas el **gauge EX** (hasta nivel 99 con +3% de efectividad por nivel). La victoria da **oro**, dropea armas, y daña al jefe de tu piso en **La Torre del Sistema**.
+- **Clases y evolución**: elige clase (Guerrero/Guardia/Sabio/Cazador), cambiala en el shop, y evoluciona. Cada clase tiene **agilidad propia**, **Raid Skill** exclusiva (pasiva global + activa) y elemento de magia predeterminado.
+- **Shop**: gastá tu oro en títulos (con pasivas de XP/oro/ataque), colores, armas, armaduras, reliquias, **pociones porcentuales** (cura 30% HP) y auras de raid. Lo que equipás se ve en el perfil y el leaderboard.
+- **Party en vivo (Portal)**: únete a un canal de party y ve en tiempo real quién está online, el leaderboard de niveles, la actividad de tus amigos y la **raid semanal**: un jefe con HP compartido entre toda la party.
+- **Raid semanal ISO (lunes–domingo)**: jefe con 500 HP grupales. Se reinicia cada semana ISO. El botón de pelea se **deshabilita tras derrotarlo** hasta el próximo lunes. Completar la meta diaria (ej: "10.000 pasos") hace **3.5% de daño porcentual** al jefe (1×/jugador/día; cap máx de daño pasivo por tier de dificultad).
+- **La Torre del Sistema (100+ pisos)**: generación procedural infinita con escalado de dificultad, recompensas acumulativas y jefes únicos.
+- **Arena de Entrenamiento**: combates 1v1 (2/día) y Torneo de 16 participantes (1/día) contra bots de la party.
 
 ## 🔮 Cómo se usó Portal (requisito de entrega)
 
@@ -45,7 +47,7 @@ Portal es el corazón del modo multiplayer. Todo lo que se ve en vivo —presenc
 
 3. **Notificaciones en tiempo real** — Completar una quest publica `done`/`levelup` al canal; la party lo recibe y lo muestra como toast desde cualquier pestaña, además del feed de actividad (nivel, raid, joins, bots de la demo).
 
-4. **Raid con progreso grupal** — los mensajes `raidHit` del canal son el **estado del jefe**: cada golpe suma daño compartido en vivo (con regeneración si nadie golpea en 24h) y el feed muestra quién pegó. La recompensa (aura) es exclusiva de quienes contribuyeron.
+4. **Raid con progreso grupal** — los mensajes `raidHit` del canal son el **estado del jefe**: cada golpe suma daño compartido en vivo (con regeneración si nadie golpea en 24h) y el feed muestra quién pegó. Completar la meta diaria aplica **3.5% de daño porcentual** al jefe (1×/jugador/día; limitado por cap de daño pasivo según el tier). La recompensa (aura) es exclusiva de quienes contribuyeron.
 
 5. **Escalable sin infraestructura** — No hay servidor propio: el realtime, la presencia, el historial y el orden de mensajes los maneja la plataforma de Portal. Nuestro "backend" son dos serverless functions de Vercel (una para mintear la identidad si quisiéramos, otra para generar quests con IA).
 
