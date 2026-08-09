@@ -32,6 +32,12 @@ export interface PlayerState {
   battle: { hp: number; mp: number; ex: number; exLevel: number; exXp: number };
   prefs: string[];
   music: boolean;
+  agility?: number;
+  boots?: string | null;
+  energy?: { tower: number; arena1v1: number; arenaTourney: number; lastReset: string };
+  raidSkillLevel?: number;
+  raidKills?: number;
+  elements?: string[];
 }
 
 export interface PartyMessage {

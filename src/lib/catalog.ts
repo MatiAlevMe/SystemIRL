@@ -89,7 +89,40 @@ export const RAID_AURAS: ShopItem[] = [
   { id: "u-eco", name: "Aura del Eco", kind: "aura", price: 0, desc: "+5% de crítico.", bonus: { crit: 0.05 } },
 ];
 
-export const SHOP_ITEMS: ShopItem[] = [...TITLES, ...COLORS, ...WEAPON_ITEMS, ...ARMOR_ITEMS, ...TRINKETS, ...POTIONS, ...MUSIC_ITEMS];
+export const BOOTS_ITEMS: ShopItem[] = [
+  { id: "b-ligeras", name: "Botas Ligeras", kind: "boots", price: 250, desc: "+10 Agilidad.", bonus: { agi: 10 } },
+  { id: "b-pesadas", name: "Botas Pesadas", kind: "boots", price: 300, desc: "+5 Defensa, -5 Agilidad.", bonus: { def: 5, agi: -5 } },
+  { id: "b-viento", name: "Botas del Viento", kind: "boots", price: 750, desc: "+25 Agilidad.", bonus: { agi: 25 } },
+];
+
+export const GEM_ITEMS: ShopItem[] = [
+  { id: "g-fuego", name: "Gema de Fuego", kind: "gem", price: 600, desc: "Desbloquea el elemento Fuego." },
+  { id: "g-hielo", name: "Gema de Hielo", kind: "gem", price: 600, desc: "Desbloquea el elemento Hielo." },
+  { id: "g-electrico", name: "Gema Eléctrica", kind: "gem", price: 600, desc: "Desbloquea el elemento Eléctrico." },
+  { id: "g-sagrado", name: "Gema Sagrada", kind: "gem", price: 600, desc: "Desbloquea el elemento Sagrado." },
+  { id: "g-sombra", name: "Gema de Sombra", kind: "gem", price: 600, desc: "Desbloquea el elemento Sombra." },
+];
+
+export const LENS_ITEM: ShopItem = {
+  id: "item-lente",
+  name: "Lente del Sistema",
+  kind: "lens",
+  price: 150,
+  desc: "Permite ver debilidades y fortalezas de cualquier enemigo.",
+};
+
+export const SHOP_ITEMS: ShopItem[] = [
+  ...TITLES,
+  ...COLORS,
+  ...WEAPON_ITEMS,
+  ...ARMOR_ITEMS,
+  ...TRINKETS,
+  ...POTIONS,
+  ...MUSIC_ITEMS,
+  ...BOOTS_ITEMS,
+  ...GEM_ITEMS,
+  LENS_ITEM,
+];
 
 export function itemById(id: string | null | undefined): ShopItem | undefined {
   if (!id) return undefined;

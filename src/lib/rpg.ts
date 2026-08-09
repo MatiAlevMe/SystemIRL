@@ -9,6 +9,7 @@ import type { PlayerClass, PlayerState, Quest, QuestCategory, QuestDifficulty } 
 import { CLASS_ICON } from "../types";
 import { xpProgress } from "./xp";
 import { itemById, WEAPON_ITEMS, type ShopItem } from "./catalog";
+import { CLASS_BALANCE, BOSS_SPEED_CAP_MULT } from "./balance";
 
 // ---- La Torre del Sistema ------------------------------------
 // Pisos con jefe: completar quests daña al jefe del piso actual; al caer,
@@ -186,6 +187,7 @@ export interface CombatStats {
   def: number;
   crit: number;
   magic: number;
+  agility: number;
 }
 
 export function combatStats(p: PlayerState): CombatStats {
@@ -194,6 +196,7 @@ export function combatStats(p: PlayerState): CombatStats {
   const armor = itemById(p.armor);
   const trinket = itemById(p.trinket);
   const aura = itemById(p.aura);
+  const boots = itemById(p.boots);
   const s = p.stats;
 
   let maxHp = 50 + s.vitality * 2 + level * 10;
@@ -202,6 +205,8 @@ export function combatStats(p: PlayerState): CombatStats {
   let def = 5 + s.vitality * 0.5 + level * 2 + (armor?.bonus?.def ?? 0);
   let crit = 0.05 + p.coins * 0.002 + (trinket?.bonus?.crit ?? 0);
   const magic = s.intelligence * 0.5;
+
+  let agility = (p.agility ?? 45) + level + (boots?.bonus?.agi ?? 0);
 
   if (p.cls === "guerrero") atk *= 1.2;
   if (p.cls === "guardia") {
@@ -224,6 +229,7 @@ export function combatStats(p: PlayerState): CombatStats {
     def: Math.round(def),
     crit: Math.min(0.5, crit),
     magic: Math.round(magic),
+    agility: Math.round(agility),
   };
 }
 
@@ -356,6 +362,8 @@ export interface Member {
   gauge: number;
   defending: boolean;
   evolved: boolean;
+  agility: number;
+  agenda: number;
 }
 
 export interface EnemyState {
@@ -438,9 +446,12 @@ export function buildParty(player: PlayerState, bots: Array<{ name: string; cls:
       gauge: 0,
       defending: false,
       evolved: classEvolved(player),
+      agility: cs.agility,
+      agenda: 0,
     },
   ];
   for (const b of bots) {
+    const baseAgi = CLASS_BALANCE[b.cls]?.baseAgility ?? 45;
     team.push({
       id: `bot-${b.name}`,
       name: b.name,
@@ -459,6 +470,8 @@ export function buildParty(player: PlayerState, bots: Array<{ name: string; cls:
       gauge: 0,
       defending: false,
       evolved: b.level >= 5,
+      agility: baseAgi + b.level,
+      agenda: 0,
     });
   }
   return team;
@@ -751,48 +764,56 @@ function buildResult(s: BattleState, kind: BattleOutcome): BattleResult {
   };
 }
 
-// Una acción del jugador → aplica turno de player + bots + fase enemiga.
+// Una acción del jugador → avanza los turnos determinísticamente según agilidad (ATB-lite).
 export function act(state: BattleState, action: BattleAction): { state: BattleState; result: BattleResult | null } {
   if (state.result) return { state, result: null };
   const s = clone(state);
-  if (s.phase === "enemy") return { state: s, result: null };
 
-  const { weakness } = playerTurn(s, action);
-  if (s.result) return { state: s, result: buildResult(s, s.result) };
+  const aliveParty = livingParty(s);
+  const minPartyAgi = aliveParty.length > 0 ? Math.min(...aliveParty.map((m) => m.agility)) : 40;
+  const maxBossAgi = Math.round(minPartyAgi * BOSS_SPEED_CAP_MULT);
 
-  for (const bot of s.party) {
-    if (bot.id === "player" || bot.hp <= 0 || s.result) continue;
-    autoAct(s, bot);
+  const p = s.party[0];
+  if (p && p.hp > 0) {
+    const { weakness } = playerTurn(s, action);
+    if (s.result === "fled") return { state: s, result: buildResult(s, "fled") };
+    if (weakness && !s.oneMore) {
+      s.oneMore = true;
+      pushLog(s, "system", "✨ ¡ONE MORE! Tienes un turno extra.");
+    } else {
+      s.oneMore = false;
+    }
   }
 
-  if (s.enemies.every((e) => e.hp <= 0)) {
+  for (const bot of s.party.slice(1)) {
+    if (bot.hp > 0 && livingEnemies(s).length > 0) {
+      autoAct(s, bot);
+    }
+  }
+
+  if (livingEnemies(s).length === 0) {
     s.result = "victory";
+    pushLog(s, "system", "🏆 ¡Victoria! El área ha sido purgada.");
     return { state: s, result: buildResult(s, "victory") };
   }
 
-  // One More: si el golpe del jugador acertó la debilidad, turno extra.
-  if (weakness) {
-    pushLog(s, "system", "🎯 ¡ONE MORE! Turno extra.");
-    regenMp(s);
-    s.oneMore = true;
-    s.phase = "player";
-    return { state: s, result: null };
+  for (const enemy of s.enemies) {
+    if (enemy.isBoss && enemy.atk > 0) {
+      const effAgi = Math.min(enemy.atk * 2, maxBossAgi);
+      enemy.def = Math.max(enemy.def, Math.round(effAgi * 0.1));
+    }
   }
 
   enemyPhase(s);
   regenMp(s);
-  s.phase = "player";
-  s.oneMore = false;
-  s.turn += 1;
 
-  if (s.party.every((m) => m.hp <= 0)) {
+  if (livingParty(s).length === 0) {
     s.result = "defeat";
+    pushLog(s, "system", "💀 Tu party ha sido derrotada.");
     return { state: s, result: buildResult(s, "defeat") };
   }
-  if (s.enemies.every((e) => e.hp <= 0)) {
-    s.result = "victory";
-    return { state: s, result: buildResult(s, "victory") };
-  }
+
+  s.turn += 1;
   return { state: s, result: null };
 }
 

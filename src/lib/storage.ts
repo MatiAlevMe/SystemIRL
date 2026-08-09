@@ -2,6 +2,7 @@ import { get, set } from "idb-keyval";
 import type { PlayerState, Quest } from "../types";
 import { todayKey, yesterdayKey, levelFromXp } from "./xp";
 import { itemById } from "./catalog";
+import { CLASS_BALANCE } from "./balance";
 
 const PLAYER_KEY = "player";
 const QUEST_CACHE = "quests:";
@@ -30,6 +31,12 @@ export function emptyPlayer(name: string): PlayerState {
     battle: { hp: 60, mp: 30, ex: 0, exLevel: 1, exXp: 0 },
     prefs: [],
     music: false,
+    agility: 45,
+    boots: null,
+    energy: { tower: 8, arena1v1: 2, arenaTourney: 1, lastReset: todayKey() },
+    raidSkillLevel: 1,
+    raidKills: 0,
+    elements: ["fuego"],
   };
 }
 
@@ -38,6 +45,12 @@ export function emptyPlayer(name: string): PlayerState {
 export function normalizePlayer(p: Partial<PlayerState> | null | undefined): PlayerState | null {
   if (!p || typeof p.name !== "string") return null;
   const base = emptyPlayer(p.name);
+  const today = todayKey();
+  const rawEnergy = p.energy;
+  const energy = !rawEnergy || rawEnergy.lastReset !== today
+    ? { tower: 8, arena1v1: 2, arenaTourney: 1, lastReset: today }
+    : { ...base.energy!, ...rawEnergy };
+
   return {
     ...base,
     ...p,
@@ -54,6 +67,12 @@ export function normalizePlayer(p: Partial<PlayerState> | null | undefined): Pla
     battle: { ...base.battle, ...p.battle },
     prefs: Array.isArray(p.prefs) ? p.prefs : [],
     music: Boolean(p.music),
+    agility: typeof p.agility === "number" ? p.agility : (CLASS_BALANCE[p.cls ?? base.cls]?.baseAgility ?? 45),
+    boots: p.boots ?? null,
+    energy,
+    raidSkillLevel: typeof p.raidSkillLevel === "number" ? p.raidSkillLevel : 1,
+    raidKills: typeof p.raidKills === "number" ? p.raidKills : 0,
+    elements: Array.isArray(p.elements) && p.elements.length > 0 ? p.elements : [CLASS_BALANCE[p.cls ?? base.cls]?.defaultElement ?? "fuego"],
   };
 }
 
