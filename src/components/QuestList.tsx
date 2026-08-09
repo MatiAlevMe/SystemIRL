@@ -11,6 +11,7 @@ interface Props {
 }
 
 export default function QuestList({ quests, completed, busy, onComplete, source }: Props) {
+  const isAI = source === "gemini" || source === "kilo" || source === "zen";
   const sorted = useMemo(
     () => [...quests].sort((a, b) => Number(completed.has(a.id)) - Number(completed.has(b.id))),
     [quests, completed],
@@ -22,8 +23,8 @@ export default function QuestList({ quests, completed, busy, onComplete, source 
     <section className="quest-list">
       <div className="section-head">
         <h2>Quests de hoy</h2>
-        <span className={`quest-source ${source}`}>
-          {source === "gemini" ? "⚡ generadas por IA" : source === "offline" ? "modo offline" : "El Sistema"}
+        <span className={`quest-source ${isAI ? "gemini" : source}`}>
+          {isAI ? "⚡ generadas por IA" : source === "offline" ? "modo offline" : "El Sistema"}
         </span>
       </div>
 

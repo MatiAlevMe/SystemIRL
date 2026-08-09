@@ -33,7 +33,7 @@ Portal es el corazón del modo multiplayer:
 |------|-----------|
 | Frontend | React 19 + Vite 8 + TypeScript (strict) |
 | Tiempo real | **Portal** (`@portalsdk/core` + `@portalsdk/react`) |
-| IA | Gemini (generación de quests) vía serverless de Vercel, con fallback offline |
+| IA | Gemini / Kilo Gateway / OpenCode Zen (cualquiera con key; fallback offline) |
 | Persistencia | IndexedDB (`idb-keyval`) — perfil, XP, quests del día |
 | Deploy | Vercel (SPA + serverless functions `api/*.ts`) |
 
@@ -61,8 +61,13 @@ La app funciona sin Gemini (usa el pool offline) y sin tokens identificados (mod
 VITE_PORTAL_PUBLISHABLE_KEY=pk_...
 # Server-side (solo en Vercel / CLI)
 PORTAL_SECRET=sk_...
-GEMINI_API_KEY=...
+GEMINI_API_KEY=...            # IA para quests (modelos free: gemini-3.6-flash)
+QUEST_PROVIDER=auto           # auto | gemini | kilo | zen (auto = el que tenga key)
+KILO_API_KEY=...              # (opcional) Kilo Gateway free ~200 req/hr
+ZEN_API_KEY=...               # (opcional) OpenCode Zen free (big-pickle, deepseek-v4-flash-free)
 ```
+
+> La generación de quests intenta los proveedores en orden (`gemini` → `kilo` → `zen`), y si ninguno responde cae a un pool offline. Con configurar **una** key la IA ya funciona.
 
 > **Seguridad**: las keys reales viven en las variables de entorno de Vercel, nunca en el repo. `.env` está en `.gitignore`.
 

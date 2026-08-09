@@ -5,13 +5,12 @@
 // Only needed if you want real names in presence instead of anonymous ids.
 // The app works fine WITHOUT this (anonymous mode). Enable it later if time allows.
 
-export default async function handler(request: Request): Promise<Response> {
+// Named HTTP export = Vercel Web API signature. The previous `export default`
+// handler returned a Response that Vercel ignored, so the function hung.
+export async function POST(request: Request): Promise<Response> {
   const secretKey = process.env.PORTAL_SECRET;
   if (!secretKey) {
     return json({ error: "PORTAL_SECRET not configured" }, 500);
-  }
-  if (request.method !== "POST") {
-    return json({ error: "Method not allowed" }, 405);
   }
 
   let body: { userId?: string; name?: string } = {};

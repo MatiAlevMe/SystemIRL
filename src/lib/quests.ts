@@ -1,9 +1,12 @@
 import type { Quest, QuestCategory, QuestDifficulty } from "../types";
 import { loadQuestCache, saveQuestCache } from "./storage";
 
+export type AiSource = "gemini" | "kilo" | "zen";
+export const AI_SOURCES: AiSource[] = ["gemini", "kilo", "zen"];
+
 export interface QuestsResult {
   quests: Quest[];
-  source: "gemini" | "fallback" | "cached" | "offline";
+  source: AiSource | "fallback" | "cached" | "offline";
 }
 
 export interface QuestsRequest {
@@ -28,7 +31,11 @@ export async function fetchDailyQuests(req: QuestsRequest): Promise<QuestsResult
     if (res.ok) {
       const data = (await res.json()) as { source?: string; quests?: Quest[] };
       if (data.quests && data.quests.length > 0) {
-        result = { quests: data.quests, source: data.source === "gemini" ? "gemini" : "fallback" };
+        const s = data.source as string;
+        result = {
+          quests: data.quests,
+          source: AI_SOURCES.includes(s as AiSource) ? (s as AiSource) : "fallback",
+        };
         await saveQuestCache(date, data.quests);
       }
     }

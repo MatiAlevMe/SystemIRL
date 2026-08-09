@@ -1,8 +1,13 @@
 // SystemIRL — quest generator (Vercel Serverless Function)
 // POST /api/quests
 // Body: { history: string[], playerLevel: number, streak: number, count?: number }
-// Returns personalized daily quests using Gemini. Falls back to a canned pool
-// when the API key is missing or Gemini fails, so the app always works.
+// Returns personalized daily quests from the first AI provider with a key
+// (Gemini, Kilo Gateway or OpenCode Zen; QUEST_PROVIDER can force one), falling
+// back to a canned pool so the app always works.
+
+// Named HTTP export = Vercel Web API signature. The previous `export default`
+// handler returned a Response that Vercel ignored, so the function hung.
+export const maxDuration = 30;
 
 export type QuestCategory = "strength" | "intelligence" | "vitality" | "gold";
 export type QuestDifficulty = "F" | "E" | "D" | "C" | "B";
@@ -23,11 +28,7 @@ interface QuestsBody {
   count?: number;
 }
 
-export default async function handler(request: Request): Promise<Response> {
-  if (request.method !== "POST") {
-    return json({ error: "Method not allowed" }, 405);
-  }
-
+export async function POST(request: Request): Promise<Response> {
   let body: QuestsBody = {};
   try {
     body = (await request.json()) as QuestsBody;
@@ -40,16 +41,10 @@ export default async function handler(request: Request): Promise<Response> {
   const streak = Math.max(0, Number(body.streak) || 0);
   const count = Math.min(6, Math.max(3, Number(body.count) || 3));
 
-  const apiKey = process.env.GEMINI_API_KEY;
-
-  if (apiKey) {
-    try {
-      const quests = await generateWithGemini(apiKey, { history, playerLevel, streak, count });
-      if (quests && quests.length > 0) {
-        return json({ source: "gemini", quests });
-      }
-    } catch (err) {
-      console.error("Gemini failed, falling back to canned pool:", err);
+  for (const source of providerOrder()) {
+    const quests = await trySource(source, { history, playerLevel, streak, count });
+    if (quests && quests.length > 0) {
+      return json({ source, quests });
     }
   }
 
@@ -63,21 +58,60 @@ function json(body: unknown, status = 200): Response {
   });
 }
 
-// Free-tier models ordered by freshness. gemini-2.0-flash is retired from the
-// free tier (limit 0), so we try newer flash models first. GEMINI_MODEL overrides
-// and goes first (we still fall back if it fails).
-const MODELS = process.env.GEMINI_MODEL
+// ---- Provider selection --------------------------------------
+export type QuestSource = "gemini" | "kilo" | "zen";
+
+interface QuestOpts {
+  history: string[];
+  playerLevel: number;
+  streak: number;
+  count: number;
+}
+
+const FETCH_TIMEOUT_MS = 8000;
+
+// QUEST_PROVIDER=auto (default): prueba en orden gemini -> kilo -> zen
+// los que tengan key. Con QUEST_PROVIDER=gemini|kilo|zen ese va primero
+// y el resto sigue como respaldo si tiene key.
+function providerOrder(): QuestSource[] {
+  const forced = process.env.QUEST_PROVIDER;
+  const available: QuestSource[] = [];
+  if (process.env.GEMINI_API_KEY) available.push("gemini");
+  if (process.env.KILO_API_KEY) available.push("kilo");
+  if (process.env.ZEN_API_KEY) available.push("zen");
+
+  if (forced === "gemini" || forced === "kilo" || forced === "zen") {
+    return [forced, ...available.filter((p) => p !== forced)];
+  }
+  return available;
+}
+
+async function trySource(source: QuestSource, opts: QuestOpts): Promise<Quest[] | null> {
+  try {
+    const quests =
+      source === "gemini"
+        ? await generateWithGemini(opts)
+        : await generateOpenAICompatible(source, opts);
+    if (quests && quests.length > 0) return quests;
+  } catch (err) {
+    console.error(`[${source}] failed:`, err);
+  }
+  return null;
+}
+
+// ---- Gemini (Google generateContent) -------------------------
+// gemini-2.0-flash is retired from the free tier (limit 0), so newer flash
+// models go first. GEMINI_MODEL overrides and goes first.
+const GEMINI_MODELS = process.env.GEMINI_MODEL
   ? [process.env.GEMINI_MODEL, "gemini-3.6-flash", "gemini-2.5-flash"]
   : ["gemini-3.6-flash", "gemini-2.5-flash", "gemini-2.0-flash"];
 
-async function generateWithGemini(
-  apiKey: string,
-  opts: { history: string[]; playerLevel: number; streak: number; count: number },
-): Promise<Quest[] | null> {
-  const { history, playerLevel, streak, count } = opts;
-  for (const model of MODELS) {
+async function generateWithGemini(opts: QuestOpts): Promise<Quest[] | null> {
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) return null;
+  for (const model of GEMINI_MODELS) {
     try {
-      const quests = await generateWithModel(apiKey, model, { history, playerLevel, streak, count });
+      const quests = await callGemini(apiKey, model, opts);
       if (quests && quests.length > 0) return quests;
     } catch (err) {
       console.error(`Gemini ${model} failed:`, err);
@@ -86,16 +120,110 @@ async function generateWithGemini(
   return null;
 }
 
-async function generateWithModel(
-  apiKey: string,
-  model: string,
-  opts: { history: string[]; playerLevel: number; streak: number; count: number },
-): Promise<Quest[] | null> {
-  const { history, playerLevel, streak, count } = opts;
+async function callGemini(apiKey: string, model: string, opts: QuestOpts): Promise<Quest[] | null> {
+  const res = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        system_instruction: { parts: [{ text: SYSTEM_INSTRUCTION }] },
+        contents: [{ role: "user", parts: [{ text: buildPrompt(opts) }] }],
+        generationConfig: { temperature: 0.9, responseMimeType: "application/json" },
+      }),
+      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+    },
+  );
 
+  if (!res.ok) throw new Error(`Gemini HTTP ${res.status}: ${await res.text()}`);
+
+  const data = (await res.json()) as {
+    candidates?: { content?: { parts?: { text?: string }[] } }[];
+  };
+  const text = data.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
+  return parseQuests(text, opts.count);
+}
+
+// ---- Kilo Gateway / OpenCode Zen (OpenAI-compatible) ---------
+interface OpenAICompatConfig {
+  apiKey: string;
+  baseUrl: string;
+  models: string[];
+}
+
+function openAICompatConfig(source: "kilo" | "zen"): OpenAICompatConfig {
+  if (source === "kilo") {
+    return {
+      apiKey: process.env.KILO_API_KEY ?? "",
+      baseUrl: "https://api.kilo.ai/api/gateway",
+      models: process.env.KILO_MODEL
+        ? [process.env.KILO_MODEL, "nvidia/nemotron-3-super-120b-a12b:free", "inclusionai/ling-3.0-flash:free"]
+        : ["nvidia/nemotron-3-super-120b-a12b:free", "inclusionai/ling-3.0-flash:free"],
+    };
+  }
+  return {
+    apiKey: process.env.ZEN_API_KEY ?? "",
+    baseUrl: "https://opencode.ai/zen/v1",
+    models: process.env.ZEN_MODEL
+      ? [process.env.ZEN_MODEL, "big-pickle", "deepseek-v4-flash-free"]
+      : ["big-pickle", "deepseek-v4-flash-free"],
+  };
+}
+
+async function generateOpenAICompatible(source: "kilo" | "zen", opts: QuestOpts): Promise<Quest[] | null> {
+  const config = openAICompatConfig(source);
+  if (!config.apiKey) return null;
+  for (const model of config.models) {
+    try {
+      const quests = await callOpenAICompatible(source, config, model, opts);
+      if (quests && quests.length > 0) return quests;
+    } catch (err) {
+      console.error(`${source} ${model} failed:`, err);
+    }
+  }
+  return null;
+}
+
+async function callOpenAICompatible(
+  source: "kilo" | "zen",
+  config: OpenAICompatConfig,
+  model: string,
+  opts: QuestOpts,
+): Promise<Quest[] | null> {
+  const res = await fetch(`${config.baseUrl}/chat/completions`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${config.apiKey}`,
+    },
+    body: JSON.stringify({
+      model,
+      messages: [
+        { role: "system", content: SYSTEM_INSTRUCTION },
+        { role: "user", content: buildPrompt(opts) },
+      ],
+      temperature: 0.9,
+    }),
+    signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+  });
+
+  if (!res.ok) throw new Error(`${source} HTTP ${res.status}: ${await res.text()}`);
+
+  const data = (await res.json()) as {
+    choices?: { message?: { content?: string } }[];
+  };
+  const text = data.choices?.[0]?.message?.content ?? "";
+  return parseQuests(text, opts.count);
+}
+
+// ---- Shared prompt / parsing ----------------------------------
+const SYSTEM_INSTRUCTION = "Eres El Sistema. Siempre respondes JSON válido, sin markdown.";
+
+function buildPrompt(opts: QuestOpts): string {
+  const { history, playerLevel, streak, count } = opts;
   const recent = history.slice(-15).map((h) => `- ${h}`).join("\n") || "- (nuevo jugador)";
 
-  const prompt = [
+  return [
     `Eres "El Sistema", el agente que asigna quests a un jugador para mejorar su vida real.`,
     `Nivel del jugador: ${playerLevel}. Racha actual (días seguidos): ${streak}.`,
     `Historial reciente de quests completadas:\n${recent}`,
@@ -108,36 +236,11 @@ async function generateWithModel(
     `- xp entre 25 y 80, coherente con difficulty y nivel.`,
     `- description: instrucción breve de qué hacer (máx 1 frase).`,
   ].join("\n");
+}
 
-  const res = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        system_instruction: {
-          parts: [{ text: "Eres El Sistema. Siempre respondes JSON válido, sin markdown." }],
-        },
-        contents: [{ role: "user", parts: [{ text: prompt }] }],
-        generationConfig: {
-          temperature: 0.9,
-          responseMimeType: "application/json",
-        },
-      }),
-    },
-  );
-
-  if (!res.ok) {
-    throw new Error(`Gemini HTTP ${res.status}: ${await res.text()}`);
-  }
-
-  const data = (await res.json()) as {
-    candidates?: { content?: { parts?: { text?: string }[] } }[];
-  };
-  const text = data.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
+function parseQuests(text: string, count: number): Quest[] | null {
   const json = extractJson(text);
   if (!json) return null;
-
   const rawQuests = json.quests;
   if (!Array.isArray(rawQuests)) return null;
 
