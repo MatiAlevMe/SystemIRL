@@ -12,13 +12,13 @@ Contexto para agentes de IA (opencode y otros). Esta app es el entregable de **T
 Para el contexto multi-repo completo (incl. la referencia de FireGuard, otra hackathon), ver `docs/ai-reference.md` en el repo privado `MatiAlevMe/planning`.
 
 ## Qué es
-"El Sistema" = tu vida real como RPG. La IA genera quests diarias (entrenamiento, hábitos, finanzas) → XP, niveles, 4 stats (Strength/Intelligence/Vitality/Gold), streak. Party en vivo con Portal: canal `party-<código>`, presencia → leaderboard automático, feed de actividad, raid semanal y modal de level-up.
+"El Sistema" = tu vida real como RPG. La IA genera quests diarias (entrenamiento, hábitos, finanzas) → XP, niveles, 4 stats (Strength/Intelligence/Vitality/Gold), streak, combate táctico, clases/EX y Torre. El jugador elige intereses y rango que personalizan el prompt de la IA. Party en vivo con Portal: canal `party-<código>`, presencia → leaderboard automático, feed de actividad, raid semanal (jefe con HP compartido) y modal de level-up.
 
 ## Arquitectura (30 seg)
 - **SPA** Vite + React 19 + TS (strict). Estado en IndexedDB via `idb-keyval` (`src/lib/storage.ts`). XP/niveles en `src/lib/xp.ts`.
 - **Realtime**: Portal SDK (`src/portal.ts` + `useChannel` en `App.tsx`). Config de canales en `portal.config.ts`.
 - **Backend**: 2 serverless de Vercel en `api/`.
-  - `POST /api/quests` → genera quests con IA multi-provider (ver abajo). El cliente cachea por día en IndexedDB.
+  - `POST /api/quests` → genera quests con IA multi-provider (ver abajo). Body: `history`, `playerLevel`, `streak`, `count`, `tags` (intereses del jugador), `rankBias` (-1 bajar rango / +1 reliquia de ambición) y `forceRank` (god mode). El cliente cachea por día en IndexedDB (`force` la saltea para regenerar).
   - `POST /api/portal-token` → mintéa un JWT de Portal con `PORTAL_SECRET` (opcional; el app funciona anónimo sin él).
 
 ## IA multi-provider (`api/quests.ts`)
@@ -27,6 +27,7 @@ Orden según `QUEST_PROVIDER` (default `auto`): prueba los proveedores que tenga
 - `KILO_API_KEY` (+ `KILO_MODEL`): Kilo Gateway, OpenAI-compatible (`/chat/completions`). Free: `nvidia/nemotron-3-super-120b-a12b:free`.
 - `ZEN_API_KEY` (+ `ZEN_MODEL`): OpenCode Zen, OpenAI-compatible. Free: `big-pickle`, `deepseek-v4-flash-free`.
 - Timeout 8s por llamada (`AbortSignal.timeout`) y `export const maxDuration = 30`.
+- El prompt incluye los `tags` del jugador y un **guardrail** (nunca sugerir acciones peligrosas/ilegales/autodestructivas); el rango de dificultad se ajusta por `rankBias` y `forceRank` (clamped server-side).
 
 ## Comandos
 ```bash
@@ -66,5 +67,7 @@ El canónico con comentarios es `.env.template`.
 
 ## Estado actual
 - MVP live y verificado en producción (quests IA, portal-token, canales party desplegados).
-- **Post-MVP (sprint demo)**: God Mode con bots (URL `#demo`), 5 quests/día, combate+hechizos+loot (`src/lib/rpg.ts`), shop fijo (`src/lib/catalog.ts`), Torre del Sistema, raid grupal, toasts de feed, sonido WebAudio. `PlayerState` se normaliza al cargar (`normalizePlayer` en `src/lib/storage.ts`): los datos viejos de IndexedDB nunca rompen.
+- **Post-MVP (sprint demo)**: God Mode con bots (URL `#demo`), 5 quests/día, toasts de feed, sonido WebAudio. `PlayerState` se normaliza al cargar (`normalizePlayer` en `src/lib/storage.ts`): los datos viejos de IndexedDB nunca rompen.
+- **Fase 1 — combate táctico** (`src/lib/rpg.ts`): motor por turnos puro (atacar/hechizo/defender/ítem/EX/huir), debilidades ocultas por raza (ONE MORE), MP con regen, gauge EX y evolución por clase; `BattleModal.tsx` reemplaza a `CombatModal.tsx`; pestaña **Personaje** (`CharacterPanel.tsx`) con stats derivadas; raid semanal = jefe con HP compartido vía mensajes `raidHit` (mensajes = estado) y recompensa aura solo contribuyentes; shop ampliado (armaduras/reliquias/pociones/auras) con inventario.
+- **Fase 2 — personalización** (`src/lib/prefs.ts`): 8 intereses (chips 2-3) en el onboarding que viajan al prompt de `/api/quests` (+ guardrail de seguridad); botón **Regenerar** (2/día, contador por fecha) y **Bajar rango** (`rankEasy` → `rankBias -1`; reliquia de la Ambición lo sube). God mode suma **autopilot** de quests, **revelar debilidades** y **forzar rango**.
 - Detalles y próximos pasos en `docs/ROADMAP.md`.

@@ -1,8 +1,9 @@
 import { useState } from "react";
 import { CLASS_ICON, CLASS_LABEL, type PlayerClass } from "../types";
+import { MAX_PREF_TAGS, MIN_PREF_TAGS, QUEST_TAGS } from "../lib/prefs";
 
 interface Props {
-  onSubmit: (name: string, cls: PlayerClass) => void;
+  onSubmit: (name: string, cls: PlayerClass, tags: string[]) => void;
 }
 
 const CLASSES: Array<{ id: PlayerClass; desc: string }> = [
@@ -15,6 +16,15 @@ const CLASSES: Array<{ id: PlayerClass; desc: string }> = [
 export default function Onboarding({ onSubmit }: Props) {
   const [name, setName] = useState("");
   const [cls, setCls] = useState<PlayerClass>("guerrero");
+  const [tags, setTags] = useState<string[]>([]);
+
+  const toggleTag = (id: string) => {
+    setTags((cur) => {
+      if (cur.includes(id)) return cur.filter((t) => t !== id);
+      if (cur.length >= MAX_PREF_TAGS) return cur;
+      return [...cur, id];
+    });
+  };
 
   return (
     <div className="onboarding">
@@ -42,12 +52,29 @@ export default function Onboarding({ onSubmit }: Props) {
           </button>
         ))}
       </div>
+      <div className="pref-block">
+        <div className="pref-title">
+          Intereses <em>(elige {MIN_PREF_TAGS} a {MAX_PREF_TAGS})</em>
+        </div>
+        <div className="pref-chips">
+          {QUEST_TAGS.map((t) => (
+            <button
+              key={t.id}
+              type="button"
+              className={`chip ${tags.includes(t.id) ? "active" : ""}`}
+              onClick={() => toggleTag(t.id)}
+            >
+              {t.icon} {t.label}
+            </button>
+          ))}
+        </div>
+      </div>
       <form
         className="name-form"
         onSubmit={(e) => {
           e.preventDefault();
           const n = name.trim();
-          if (n) onSubmit(n, cls);
+          if (n && tags.length >= MIN_PREF_TAGS) onSubmit(n, cls, tags);
         }}
       >
         <input
@@ -57,11 +84,11 @@ export default function Onboarding({ onSubmit }: Props) {
           placeholder="Nombre de jugador"
           maxLength={24}
         />
-        <button type="submit" disabled={!name.trim()}>
+        <button type="submit" disabled={!name.trim() || tags.length < MIN_PREF_TAGS}>
           Despertar ▸
         </button>
       </form>
-      <p className="hint">Elegí tu clase. La demo brilla con una segunda pestaña abierta.</p>
+      <p className="hint">Elegí tu clase y tus intereses: la IA arma tus quests a partir de eso.</p>
     </div>
   );
 }

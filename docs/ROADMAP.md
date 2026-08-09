@@ -31,6 +31,7 @@
 | 5. Deploy Vercel + config Portal | ✅ | live en `system-irl.vercel.app`, config desplegada |
 | 6. Entregables (README, pitch, video, formulario) | 🔜 | docs listas, falta video + formulario |
 | 7. Post-MVP: God Mode + bots, 5 quests, toasts, raid grupal, combate, shop, torre, sonido | ✅ | commits `feat(demo/quests/party/rpg/shop/tower/ux)` |
+| 8. Post-MVP v2: combate táctico por turnos, clases/EX/evolución, Personaje, raid boss con HP compartido, shop ampliado, prefs (intereses, regenerar, rango) | ✅ | commits `feat(rpg)` + `feat(prefs)` |
 
 ## Pasos manuales que debes hacer tú
 
@@ -62,20 +63,26 @@ Los canales `party-*` ya aceptan anónimos por defecto, así que no es bloqueant
 
 ### 5. Probar la demo en vivo (ahora con God Mode)
 1. Abre `https://system-irl.vercel.app/#demo` (el `#demo` activa el panel de demo).
-2. Crea tu jugador y entra a una party con el código `RAGNAROK`.
+2. Crea tu jugador, elige **clase** e **intereses** (la IA arma las quests a partir de eso) y entra a una party con el código `RAGNAROK`.
 3. En el panel **GOD MODE** (abajo a la derecha):
    - **Spawn bots** → Jinwoo y Cha entran con presencia real al leaderboard.
+   - **Autopilot quests** → completa las quests solas (combate + level-up sin tocar nada).
    - **Bot quest / Bot level-up / Bot raid** → llenan el feed en vivo (verás los toasts desde la pestaña Quests).
-   - **+60 XP / Subir nivel / +500 oro / Nuevo día** → controlás la progresión del video.
-   - **Victoria forzada / Hechizo garantizado** → el combate siempre sale espectacular.
+   - **+60 XP / Subir nivel / +500 oro / Nuevo día / Reset total** → controlás la progresión del video.
+   - **Rellenar HP/MP / Matar jefe raid / Revelar debilidades** → el combate y la raid siempre salen espectaculares.
    - **Golpear jefe / Piso 2 / Piso 5** → controlás La Torre.
+   - **Forzar rango: F / B** → genera quests de dificultad extrema para la demo.
 
 ## Backlog — demo boosters (hechos en el post-MVP)
-- [x] **God mode / Demo panel** (`#demo`): bots con presencia real (clientes de Portal propios), +XP, level-up, oro, streak, nuevo día, provider forzado, combate forzado y control de la Torre. → la demo es autónoma y reproducible en video.
-- [x] **RPG layer**: combate + monstruos por dificultad + hechizos + loot (oro y drops de armas).
-- [x] **Shop demo**: títulos/colores/armas con bonos; equipamiento visible en perfil y leaderboard.
+- [x] **God mode / Demo panel** (`#demo`): bots con presencia real (clientes de Portal propios), +XP, level-up, oro, streak, nuevo día, provider forzado, control de la Torre, autopilot de quests, forzar rango, revelar debilidades y reset total. → la demo es autónoma y reproducible en video.
+- [x] **RPG layer v1**: combate + monstruos por dificultad + hechizos + loot (oro y drops de armas).
+- [x] **RPG layer v2 (combate táctico)**: combate por turnos (atacar/hechizo/defender/ítem/EX/huir), debilidades ocultas por raza (ONE MORE), MP con regen, gauge EX por clase, evolución, HP persistente entre peleas (las quests curan, el level-up restaura).
+- [x] **Clases**: 4 clases con pasivas, cambio de clase en el shop (1000 + nivel×200), pestaña Personaje con stats base/derivadas + equipo + hechizos.
+- [x] **Shop ampliado**: armaduras, reliquias (crítico/MP/ambición/cazador), pociones (inventario con usos) y auras de raid.
+- [x] **Raid semanal con jefe de HP compartido**: mensajes `raidHit` = estado del jefe, derrota = 1 HP con regeneración del jefe, recompensa aura solo contribuyentes.
+- [x] **Prefs de personalización**: 8 intereses (chips 2-3) en onboarding → viajan al prompt de la IA; botón **Regenerar** (2/día) y **Bajar rango**; guardrail de seguridad en el prompt; reliquia de la Ambición sube el rango.
 - [x] **La Torre del Sistema**: 5 pisos con jefes, daño por quests, recompensas y piso final.
-- [x] **5 quests/día** (antes 3), skeleton loading, feed en vivo con toasts en cualquier pestaña, raid con progreso grupal, sonido WebAudio, copiar código de party, +XP flotante.
+- [x] **5 quests/día** (antes 3), skeleton loading, feed en vivo con toasts en cualquier pestaña, sonido WebAudio, copiar código de party, +XP flotante.
 
 ## Post-hackathon (ver planning/docs/sistema-irl.md)
 - [ ] **Tokens identificados**: conectar `/api/portal-token` (ya mintéa tokens, `PORTAL_SECRET` configurado) → presencia con identidad verificada y anti-suplantación. No aporta al video (los nombres ya salen vía metadata), por eso quedó fuera del sprint de la demo.

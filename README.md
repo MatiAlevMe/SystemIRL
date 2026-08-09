@@ -13,11 +13,12 @@ Proyecto para **The Realtime Hackathon by Portal** (7–9 ago 2026). Equipo **Ra
 
 ## 🎮 Qué hace
 
-- **Quests diarias con IA**: El Sistema genera cada día 5 quests personalizadas (Gemini, con fallback a Kilo/Zen y a un pool offline) según tu historial, nivel y racha.
-- **XP, niveles, stats y RPG**: Completar quests dispara un **combate** contra un monstruo escalado a la dificultad (daño según tus stats y tu arma). La victoria da **oro**, a veces dropea armas, y cada quest daña al jefe de tu piso en **La Torre del Sistema**.
-- **Shop**: gastá tu oro en títulos, colores de perfil y armas que potencian tu daño y tu XP. Lo que equipás se ve en tu perfil y en el leaderboard de la party.
-- **Party en vivo (Portal)**: únete a un canal de party y ve en tiempo real quién está online, el leaderboard de niveles, la actividad de tus amigos (incluso como toasts desde cualquier pestaña) y la **raid semanal** con progreso grupal.
-- **Raid semanal**: un objetivo grupal con barra de progreso compartida; cuando alguien la completa, toda la party lo ve y el contador sube en vivo.
+- **Quests diarias con IA**: El Sistema genera cada día 5 quests personalizadas (Gemini, con fallback a Kilo/Zen y a un pool offline). En el onboarding eliges **intereses** (gimnasio, lectura, finanzas…) y las quests se alinean a ellos; puedes **regenerar** hasta 2 veces por día o **bajar el rango** de dificultad.
+- **RPG con combate táctico**: Completar quests dispara un **combate por turnos** contra un monstruo escalado a la dificultad. Atacas, lanzas hechizos (elementos con debilidades ocultas → ONE MORE), defiendes, gastas MP y EX. La victoria da **oro**, a veces dropea armas, y cada quest daña al jefe de tu piso en **La Torre del Sistema**.
+- **Clases y evolución**: elige clase (Guerrero/Guardia/Sabio/Cazador), cambiala en el shop cuando quieras, y tu clase **evoluciona** al nivel 5 o al piso 4.
+- **Shop**: gastá tu oro en títulos, colores, armas, **armaduras, reliquias y pociones** (usables en combate). Lo que equipás se ve en tu perfil y en el leaderboard de la party. Las auras exclusivas se ganan derrotando la raid.
+- **Party en vivo (Portal)**: únete a un canal de party y ve en tiempo real quién está online, el leaderboard de niveles, la actividad de tus amigos (incluso como toasts desde cualquier pestaña) y la **raid semanal**: un jefe con HP compartido entre toda la party.
+- **Raid semanal**: un jefe de raid con barra de HP grupal — cada golpe se propaga en vivo (mensajes = estado) y la recompensa (aura) es solo para quienes contribuyeron.
 
 ## 🔮 Cómo se usó Portal (requisito de entrega)
 
@@ -44,7 +45,7 @@ Portal es el corazón del modo multiplayer. Todo lo que se ve en vivo —presenc
 
 3. **Notificaciones en tiempo real** — Completar una quest publica `done`/`levelup` al canal; la party lo recibe y lo muestra como toast desde cualquier pestaña, además del feed de actividad (nivel, raid, joins, bots de la demo).
 
-4. **Raid con progreso grupal** — los mensajes `raid` del canal se agrupan por nombre y semana: cada miembro ve cuántos jugadores ya completaron la raid y la barra de progreso avanza en vivo.
+4. **Raid con progreso grupal** — los mensajes `raidHit` del canal son el **estado del jefe**: cada golpe suma daño compartido en vivo (con regeneración si nadie golpea en 24h) y el feed muestra quién pegó. La recompensa (aura) es exclusiva de quienes contribuyeron.
 
 5. **Escalable sin infraestructura** — No hay servidor propio: el realtime, la presencia, el historial y el orden de mensajes los maneja la plataforma de Portal. Nuestro "backend" son dos serverless functions de Vercel (una para mintear la identidad si quisiéramos, otra para generar quests con IA).
 
@@ -54,7 +55,7 @@ flujo realtime (sin backend propio):
   jugador ──send(done/levelup/raid)──▶ canal      ──▶ feed + toasts en la party
 ```
 
-> **God mode (demo)**: con `#demo` al final de la URL se activa un panel de demo con bots de party (clientes de Portal propios, con presencia real), +XP, level-up forzado, oro, control de la Torre y toggles de combate. Ideal para grabar el video sin depender de otra persona.
+> **God mode (demo)**: con `#demo` al final de la URL se activa un panel de demo con bots de party (clientes de Portal propios, con presencia real), **autopilot** de quests, +XP, level-up forzado, oro, control de la Torre, **forzar rango**, **revelar debilidades** en combate y toggles de IA. Ideal para grabar el video sin depender de otra persona.
 
 ## 🛠️ Stack
 
@@ -121,17 +122,18 @@ ZEN_API_KEY=...               # (opcional) OpenCode Zen free (big-pickle, deepse
 
 ```
 ├── api/
-│   ├── quests.ts         # Gemini: genera quests personalizadas (+ fallback)
+│   ├── quests.ts         # Gemini: genera quests personalizadas (+ fallback, tags, rango)
 │   └── portal-token.ts   # (opcional) mintéa identidad identificada con sk_
 ├── src/
 │   ├── App.tsx           # orquestación: jugador, quests, party, combate, modales
 │   ├── portal.ts         # cliente Portal (publishable key)
-│   ├── lib/              # XP/niveles, IndexedDB, quests, combate, shop, torre, sonido, bots
-│   └── components/       # Onboarding, QuestList, StatsPanel, PartyPanel, ShopPanel,
-│                         # TowerPanel, CombatModal, LevelUp, DemoPanel (god mode)
+│   ├── lib/              # XP/niveles, IndexedDB, quests, prefs, combate, shop, torre, sonido, bots
+│   └── components/       # Onboarding, QuestList, StatsPanel, CharacterPanel, PartyPanel,
+│                         # ShopPanel, TowerPanel, BattleModal, LevelUp, DemoPanel (god mode)
 ├── portal.config.ts      # canales party-* (Portal)
 └── docs/
-    └── ROADMAP.md        # plan de ejecución + entregables
+    ├── ROADMAP.md        # plan de ejecución + entregables
+    └── DEMO.md           # guion del video de la demo
 ```
 
 ## 📋 Entregables

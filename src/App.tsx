@@ -15,13 +15,16 @@ import TowerPanel from "./components/TowerPanel";
 import { portalClient } from "./portal";
 import {
   clearDoneToday,
+  clearRegens,
   completeQuest,
   emptyPlayer,
   grantXp,
   loadDoneToday,
   loadPlayer,
+  loadRegens,
   saveDoneToday,
   savePlayer,
+  saveRegens,
 } from "./lib/storage";
 import { fetchDailyQuests } from "./lib/quests";
 import { todayKey, xpForLevel, xpProgress } from "./lib/xp";
@@ -46,7 +49,7 @@ import { itemById, RAID_AURAS, type ShopItem } from "./lib/catalog";
 import { weekRaid } from "./lib/raids";
 import { playComplete, playDefeat, playLevelUp, playVictory } from "./lib/sound";
 import { startMusic, toggleMusic, isMusicOn } from "./lib/music";
-import type { PartyMessage, PlayerClass, PlayerState, Quest } from "./types";
+import type { PartyMessage, PlayerClass, PlayerState, Quest, QuestDifficulty } from "./types";
 
 function weekRaidKey(): string {
   return "raid:" + weekRaid();
@@ -109,6 +112,14 @@ function computeRaidState(messages: readonly Message<PartyMessage>[], raid: stri
   return { hp: Math.max(0, RAID_BOSS_HP - dmg), contributors, lastHitAt };
 }
 
+// Rango efectivo de dificultad: bajar rango (-1) + bonus de reliquia de ambición.
+function rankBiasOf(p: PlayerState): number {
+  const trinketBias = itemById(p.trinket)?.bonus?.rankBias ?? 0;
+  return (p.rankEasy ? -1 : 0) + trinketBias;
+}
+
+const MAX_REGENS_PER_DAY = 2;
+
 export default function App() {
   const [player, setPlayer] = useState<PlayerState | null | undefined>(undefined); // undefined = loading
   const [quests, setQuests] = useState<Quest[] | null>(null);
@@ -128,6 +139,12 @@ export default function App() {
   const [xpFloat, setXpFloat] = useState<{ id: number; text: string } | null>(null);
   const floatIdRef = useRef(0);
   const [musicOn, setMusicOn] = useState(isMusicOn);
+  const [regensLeft, setRegensLeft] = useState(0);
+  const [demoRank, setDemoRank] = useState<QuestDifficulty | null>(null);
+  const demoRankRef = useRef<QuestDifficulty | null>(null);
+  demoRankRef.current = demoRank;
+  const [autopilot, setAutopilot] = useState(false);
+  const [revealWeakness, setRevealWeakness] = useState(false);
 
   const party = useChannel<PartyMessage>({
     channelId: partyCode ? `party-${partyCode}` : undefined,
@@ -147,13 +164,17 @@ export default function App() {
     }
   }, []);
 
-  const loadQuests = useCallback(async (p: PlayerState) => {
+  const loadQuests = useCallback(async (p: PlayerState, force = false) => {
     setQuests(null);
     const res = await fetchDailyQuests({
       history: p.history,
       playerLevel: xpProgress(p.xp).level,
       streak: p.streak,
       count: 5,
+      tags: p.prefs.length > 0 ? p.prefs : undefined,
+      rankBias: rankBiasOf(p),
+      forceRank: demoRankRef.current ?? undefined,
+      force,
     });
     setQuests(res.quests);
     setQuestSource(res.source);
@@ -168,7 +189,11 @@ export default function App() {
       if (p) {
         await loadQuests(p);
         const ids = await loadDoneToday(todayKey());
-        if (alive) setDoneIds(new Set(ids));
+        const regens = await loadRegens(todayKey());
+        if (alive) {
+          setDoneIds(new Set(ids));
+          setRegensLeft(Math.max(0, MAX_REGENS_PER_DAY - regens));
+        }
       }
     })();
     return () => {
@@ -283,14 +308,39 @@ export default function App() {
   }, [raidState.hp, raidClaimed, player, partyCode]);
 
   const handleOnboard = useCallback(
-    async (name: string, cls: PlayerClass) => {
+    async (name: string, cls: PlayerClass, tags: string[]) => {
       const p = emptyPlayer(name);
-      const next = { ...p, cls };
+      const next = { ...p, cls, prefs: tags };
       await savePlayer(next);
       setPlayer(next);
       await loadQuests(next);
     },
     [loadQuests],
+  );
+
+  const handleRegenerate = useCallback(async () => {
+    if (!player || regensLeft <= 0) return;
+    const used = MAX_REGENS_PER_DAY - regensLeft + 1;
+    await saveRegens(todayKey(), used);
+    setRegensLeft(Math.max(0, MAX_REGENS_PER_DAY - used));
+    await loadQuests(player, true);
+  }, [player, regensLeft, loadQuests]);
+
+  const handleToggleRankEasy = useCallback(async () => {
+    if (!player) return;
+    const next = { ...player, rankEasy: !player.rankEasy };
+    setPlayer(next);
+    await savePlayer(next);
+    await loadQuests(next, true);
+  }, [player, loadQuests]);
+
+  const handleForceRank = useCallback(
+    async (rank: QuestDifficulty | null) => {
+      if (!player) return;
+      setDemoRank(rank);
+      await loadQuests(player, true);
+    },
+    [player, loadQuests],
   );
 
   const handleComplete = useCallback(
@@ -417,6 +467,16 @@ export default function App() {
     setBattleResult(null);
   }, []);
 
+  // Autopilot (God Mode): completa las quests pendientes solas para la demo.
+  useEffect(() => {
+    if (!autopilot || !player || !quests || battle) return;
+    const id = window.setInterval(() => {
+      const nextQuest = quests.find((q) => !doneIds.has(q.id));
+      if (nextQuest) void handleComplete(nextQuest);
+    }, 2200);
+    return () => window.clearInterval(id);
+  }, [autopilot, player, quests, doneIds, battle, handleComplete]);
+
   // ---- God mode (demo, solo visible con #demo en la URL) ----
   const handleGrantXp = useCallback(
     async (amount: number) => {
@@ -469,7 +529,9 @@ export default function App() {
   const handleNewDay = useCallback(async () => {
     if (!player) return;
     await clearDoneToday(todayKey());
+    await clearRegens(todayKey());
     setDoneIds(new Set());
+    setRegensLeft(MAX_REGENS_PER_DAY);
     await loadQuests(player);
   }, [player, loadQuests]);
 
@@ -611,7 +673,6 @@ export default function App() {
   if (!player) {
     return <Onboarding onSubmit={handleOnboard} />;
   }
-
   const progress = xpProgress(player.xp);
   const online = partyCode && party.presence ? party.presence.count : 0;
 
@@ -684,6 +745,10 @@ export default function App() {
               busy={completing}
               onComplete={handleComplete}
               source={demoSource ?? questSource}
+              onRegenerate={handleRegenerate}
+              regensLeft={regensLeft}
+              rankEasy={player.rankEasy}
+              onToggleRankEasy={handleToggleRankEasy}
             />
           </>
         ) : tab === "personaje" ? (
@@ -740,6 +805,7 @@ export default function App() {
           result={battleResult}
           onAction={handleBattleAction}
           onClose={handleCloseBattle}
+          revealWeakness={revealWeakness}
         />
       )}
 
@@ -759,6 +825,12 @@ export default function App() {
           onFullHeal={handleFullHeal}
           onKillRaid={handleKillRaid}
           onResetAll={handleResetAll}
+          autopilot={autopilot}
+          onToggleAutopilot={() => setAutopilot((v) => !v)}
+          revealWeakness={revealWeakness}
+          onToggleRevealWeakness={() => setRevealWeakness((v) => !v)}
+          demoRank={demoRank}
+          onForceRank={handleForceRank}
         />
       )}
     </div>

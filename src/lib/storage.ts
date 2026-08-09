@@ -6,6 +6,7 @@ import { itemById } from "./catalog";
 const PLAYER_KEY = "player";
 const QUEST_CACHE = "quests:";
 const DONE_KEY = "done:";
+const REGEN_KEY = "regens:";
 
 export function emptyPlayer(name: string): PlayerState {
   return {
@@ -28,6 +29,7 @@ export function emptyPlayer(name: string): PlayerState {
     inventory: {},
     battle: { hp: 60, mp: 30, ex: 0, exLevel: 1, exXp: 0 },
     prefs: [],
+    rankEasy: false,
   };
 }
 
@@ -51,6 +53,7 @@ export function normalizePlayer(p: Partial<PlayerState> | null | undefined): Pla
     inventory: p.inventory && typeof p.inventory === "object" ? p.inventory : {},
     battle: { ...base.battle, ...p.battle },
     prefs: Array.isArray(p.prefs) ? p.prefs : [],
+    rankEasy: Boolean(p.rankEasy),
   };
 }
 
@@ -174,6 +177,32 @@ export async function saveDoneToday(date: string, ids: string[]): Promise<void> 
 export async function clearDoneToday(date: string): Promise<void> {
   try {
     await set(DONE_KEY + date, []);
+  } catch {
+    /* noop */
+  }
+}
+
+// Regenerar quests tiene un tope por día (2): contador por fecha en IndexedDB.
+export async function loadRegens(date: string): Promise<number> {
+  try {
+    const n = await get<number | undefined>(REGEN_KEY + date);
+    return typeof n === "number" ? n : 0;
+  } catch {
+    return 0;
+  }
+}
+
+export async function saveRegens(date: string, count: number): Promise<void> {
+  try {
+    await set(REGEN_KEY + date, count);
+  } catch {
+    /* noop */
+  }
+}
+
+export async function clearRegens(date: string): Promise<void> {
+  try {
+    await set(REGEN_KEY + date, 0);
   } catch {
     /* noop */
   }

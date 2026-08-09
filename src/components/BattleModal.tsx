@@ -5,6 +5,7 @@ import { itemById } from "../lib/catalog";
 import {
   ELEMENT_ICON,
   EX_SKILLS,
+  RACE_WEAKNESS,
   SPELLS,
   spellsFor,
   type BattleAction,
@@ -19,6 +20,7 @@ interface Props {
   result?: BattleResult | null;
   onAction: (action: BattleAction) => void;
   onClose: () => void;
+  revealWeakness?: boolean;
 }
 
 const MODE_LABEL: Record<BattleState["mode"], string> = {
@@ -29,7 +31,7 @@ const MODE_LABEL: Record<BattleState["mode"], string> = {
 
 const POTION_IDS = ["p-pocion", "p-eter", "p-elixir", "p-mayor"];
 
-export default function BattleModal({ battle, player, result, onAction, onClose }: Props) {
+export default function BattleModal({ battle, player, result, onAction, onClose, revealWeakness }: Props) {
   const logRef = useRef<HTMLDivElement>(null);
   const enemy = battle.enemies[0];
   const me = battle.party.find((m) => m.id === "player") ?? battle.party[0];
@@ -74,9 +76,9 @@ export default function BattleModal({ battle, player, result, onAction, onClose 
             <div className="enemy-ico">{enemy.icon}</div>
             <div className="enemy-name">{enemy.name}</div>
             <div className="enemy-race">{enemy.race}</div>
-            {enemy.revealed.length > 0 && (
-              <div className="enemy-weak" title="Debilidad revelada">
-                {enemy.revealed.map((el) => (
+            {(enemy.revealed.length > 0 || revealWeakness) && (
+              <div className={`enemy-weak ${revealWeakness && enemy.revealed.length === 0 ? "demo" : ""}`} title="Debilidad revelada">
+                {Array.from(new Set([...enemy.revealed, ...(revealWeakness ? [RACE_WEAKNESS[enemy.race]] : [])])).map((el) => (
                   <span key={el}>{ELEMENT_ICON[el]}</span>
                 ))}
                 <span className="enemy-weak-label">debilidad</span>

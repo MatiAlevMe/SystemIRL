@@ -14,19 +14,32 @@ export interface QuestsRequest {
   playerLevel: number;
   streak: number;
   count?: number;
+  tags?: string[];
+  rankBias?: number;
+  forceRank?: QuestDifficulty;
+  /** Ignora la caché del día y regenera (tope por día controlado por la UI). */
+  force?: boolean;
 }
 
 export async function fetchDailyQuests(req: QuestsRequest): Promise<QuestsResult> {
   const date = new Date().toISOString().slice(0, 10);
 
-  const cached = await loadQuestCache(date);
+  const cached = req.force ? null : await loadQuestCache(date);
   let result: QuestsResult | null = null;
 
   try {
     const res = await fetch("/api/quests", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(req),
+      body: JSON.stringify({
+        history: req.history,
+        playerLevel: req.playerLevel,
+        streak: req.streak,
+        count: req.count ?? 3,
+        tags: req.tags,
+        rankBias: req.rankBias,
+        forceRank: req.forceRank,
+      }),
     });
     if (res.ok) {
       const data = (await res.json()) as { source?: string; quests?: Quest[] };

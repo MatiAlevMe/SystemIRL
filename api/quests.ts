@@ -1,6 +1,7 @@
 // SystemIRL — quest generator (Vercel Serverless Function)
 // POST /api/quests
-// Body: { history: string[], playerLevel: number, streak: number, count?: number }
+// Body: { history: string[], playerLevel: number, streak: number, count?: number,
+//         tags?: string[], rankBias?: number, forceRank?: "F"|"E"|"D"|"C"|"B" }
 // Returns personalized daily quests from the first AI provider with a key
 // (Gemini, Kilo Gateway or OpenCode Zen; QUEST_PROVIDER can force one), falling
 // back to a canned pool so the app always works.
@@ -26,6 +27,9 @@ interface QuestsBody {
   playerLevel?: number;
   streak?: number;
   count?: number;
+  tags?: string[];
+  rankBias?: number;
+  forceRank?: QuestDifficulty;
 }
 
 export async function POST(request: Request): Promise<Response> {
@@ -40,15 +44,26 @@ export async function POST(request: Request): Promise<Response> {
   const playerLevel = Math.max(1, Number(body.playerLevel) || 1);
   const streak = Math.max(0, Number(body.streak) || 0);
   const count = Math.min(6, Math.max(3, Number(body.count) || 3));
+  const tags = Array.isArray(body.tags)
+    ? body.tags.filter((t): t is string => typeof t === "string").slice(0, 6)
+    : [];
+  const rankBias = Math.max(-2, Math.min(3, Math.round(Number(body.rankBias) || 0)));
+  const forceRank = DIFFICULTIES.includes(body.forceRank as QuestDifficulty)
+    ? (body.forceRank as QuestDifficulty)
+    : undefined;
 
+  const rank = rankRange(rankBias);
   for (const source of providerOrder()) {
-    const quests = await trySource(source, { history, playerLevel, streak, count });
+    const quests = await trySource(source, { history, playerLevel, streak, count, tags, rank, forceRank });
     if (quests && quests.length > 0) {
       return json({ source, quests });
     }
   }
 
-  return json({ source: "fallback", quests: fallbackQuests({ playerLevel, streak, count }) });
+  return json({
+    source: "fallback",
+    quests: fallbackQuests({ playerLevel, streak, count, rank, forceRank }),
+  });
 }
 
 function json(body: unknown, status = 200): Response {
@@ -66,6 +81,9 @@ interface QuestOpts {
   playerLevel: number;
   streak: number;
   count: number;
+  tags: string[];
+  rank: [QuestDifficulty, QuestDifficulty];
+  forceRank?: QuestDifficulty;
 }
 
 const FETCH_TIMEOUT_MS = 8000;
@@ -141,7 +159,7 @@ async function callGemini(apiKey: string, model: string, opts: QuestOpts): Promi
     candidates?: { content?: { parts?: { text?: string }[] } }[];
   };
   const text = data.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
-  return parseQuests(text, opts.count);
+  return parseQuests(text, opts.count, { rank: opts.rank, forceRank: opts.forceRank });
 }
 
 // ---- Kilo Gateway / OpenCode Zen (OpenAI-compatible) ---------
@@ -213,24 +231,37 @@ async function callOpenAICompatible(
     choices?: { message?: { content?: string } }[];
   };
   const text = data.choices?.[0]?.message?.content ?? "";
-  return parseQuests(text, opts.count);
+  return parseQuests(text, opts.count, { rank: opts.rank, forceRank: opts.forceRank });
 }
 
 // ---- Shared prompt / parsing ----------------------------------
 const SYSTEM_INSTRUCTION = "Eres El Sistema. Siempre respondes JSON válido, sin markdown.";
 
 function buildPrompt(opts: QuestOpts): string {
-  const { history, playerLevel, streak, count } = opts;
+  const { history, playerLevel, streak, count, tags, rank, forceRank } = opts;
   const recent = history.slice(-15).map((h) => `- ${h}`).join("\n") || "- (nuevo jugador)";
+  const interests =
+    tags.length > 0
+      ? `Intereses del jugador (prioriza quests alineadas con estos tags):\n${tags.map((t) => `- ${t}`).join("\n")}`
+      : "Intereses: sin preferencias marcadas, usa variedad.";
+  const rankRule = forceRank
+    ? `Genera todas las quests con dificultad EXACTA ${forceRank}.`
+    : rank[0] === "F" && rank[1] === "B"
+      ? ""
+      : `Las quests deben tener dificultad entre ${rank[0]} y ${rank[1]} (rango ${rank[0] === "D" ? "endurecido" : "suavizado"}).`;
 
   return [
     `Eres "El Sistema", el agente que asigna quests a un jugador para mejorar su vida real.`,
     `Nivel del jugador: ${playerLevel}. Racha actual (días seguidos): ${streak}.`,
     `Historial reciente de quests completadas:\n${recent}`,
+    interests,
     ``,
     `Genera exactamente ${count} quests diarias NUEVAS para hoy (no repitas las del historial),`,
     `adaptadas al nivel del jugador (más difíciles/mayor XP si es nivel alto).`,
+    rankRule,
     `Cada quest debe ser concreta, accionable y realista (fitness, hábitos, finanzas, lectura, enfoque).`,
+    `GUARDRAIL: NUNCA sugieras acciones peligrosas, ilegales, autodestructivas ni que pongan en riesgo`,
+    `la salud física o mental. Si un interés del jugador entra en conflicto, deriva hacia algo seguro y constructivo.`,
     `Responde SOLO con JSON:`,
     `{"quests":[{"title":"...","description":"...","category":"strength|intelligence|vitality|gold","difficulty":"F|E|D|C|B","xp":25}]}`,
     `- xp entre 25 y 80, coherente con difficulty y nivel.`,
@@ -238,7 +269,7 @@ function buildPrompt(opts: QuestOpts): string {
   ].join("\n");
 }
 
-function parseQuests(text: string, count: number): Quest[] | null {
+function parseQuests(text: string, count: number, opts: Pick<QuestOpts, "rank" | "forceRank">): Quest[] | null {
   const json = extractJson(text);
   if (!json) return null;
   const rawQuests = json.quests;
@@ -246,7 +277,7 @@ function parseQuests(text: string, count: number): Quest[] | null {
 
   const quests: Quest[] = rawQuests
     .slice(0, count)
-    .map((q: Record<string, unknown>, i: number) => sanitizeQuest(q, i))
+    .map((q: Record<string, unknown>, i: number) => sanitizeQuest(q, i, opts))
     .filter((q: Quest | null): q is Quest => q !== null);
 
   return quests.length > 0 ? quests : null;
@@ -267,12 +298,37 @@ function extractJson(text: string): { quests?: unknown } | null {
 const CATEGORIES: QuestCategory[] = ["strength", "intelligence", "vitality", "gold"];
 const DIFFICULTIES: QuestDifficulty[] = ["F", "E", "D", "C", "B"];
 
-function sanitizeQuest(q: Record<string, unknown>, i: number): Quest | null {
+// Rango de dificultades según rankBias (preferencias del jugador).
+// -1 "bajar rango": F..D · 0 normal: F..B · +1 (reliquia de ambición): E..B · ≥2: D..B
+function rankRange(bias: number): [QuestDifficulty, QuestDifficulty] {
+  if (bias <= -1) return ["F", "D"];
+  if (bias === 1) return ["E", "B"];
+  if (bias >= 2) return ["D", "B"];
+  return ["F", "B"];
+}
+
+function clampRank(d: QuestDifficulty, lo: QuestDifficulty, hi: QuestDifficulty): QuestDifficulty {
+  const i = DIFFICULTIES.indexOf(d);
+  const min = DIFFICULTIES.indexOf(lo);
+  const max = DIFFICULTIES.indexOf(hi);
+  const c = Math.max(min, Math.min(max, i === -1 ? 2 : i));
+  return DIFFICULTIES[c];
+}
+
+function sanitizeQuest(
+  q: Record<string, unknown>,
+  i: number,
+  opts: Pick<QuestOpts, "rank" | "forceRank">,
+): Quest | null {
   const title = typeof q.title === "string" ? q.title.trim().slice(0, 120) : "";
   if (!title) return null;
   const description = typeof q.description === "string" ? q.description.trim().slice(0, 200) : "";
   const category = CATEGORIES.includes(q.category as QuestCategory) ? (q.category as QuestCategory) : "vitality";
-  const difficulty = DIFFICULTIES.includes(q.difficulty as QuestDifficulty) ? (q.difficulty as QuestDifficulty) : "E";
+  let difficulty: QuestDifficulty = DIFFICULTIES.includes(q.difficulty as QuestDifficulty)
+    ? (q.difficulty as QuestDifficulty)
+    : "E";
+  if (opts.forceRank) difficulty = opts.forceRank;
+  else difficulty = clampRank(difficulty, opts.rank[0], opts.rank[1]);
   const xp = Math.max(20, Math.min(100, Number(q.xp) || 40));
   return { id: `q-${Date.now().toString(36)}-${i}`, title, description, category, difficulty, xp };
 }
@@ -314,16 +370,33 @@ function shuffle<T>(arr: T[]): T[] {
   return a;
 }
 
-function fallbackQuests(opts: { playerLevel: number; streak: number; count: number }): Quest[] {
+function fallbackQuests(opts: {
+  playerLevel: number;
+  streak: number;
+  count: number;
+  rank: [QuestDifficulty, QuestDifficulty];
+  forceRank?: QuestDifficulty;
+}): Quest[] {
   const boost = opts.playerLevel >= 4 ? 1.2 : 1;
-  return shuffle(POOL)
-    .slice(0, opts.count)
-    .map((p, i) => ({
-      id: `q-fb-${Date.now().toString(36)}-${i}`,
-      title: p.title,
-      description: p.description,
-      category: p.category,
-      difficulty: p.difficulty,
-      xp: Math.round(p.xp * boost / 5) * 5,
-    }));
+  const pool =
+    opts.forceRank || opts.rank[0] !== "F" || opts.rank[1] !== "B"
+      ? POOL.filter((p) => (opts.forceRank ? p.difficulty === opts.forceRank : rankInRange(p.difficulty, opts.rank)))
+      : POOL;
+  const base = shuffle(pool.length > 0 ? pool : POOL);
+  const source = Array.from({ length: opts.count }, (_, i) => base[i % base.length]);
+  return source.map((p, i) => ({
+    id: `q-fb-${Date.now().toString(36)}-${i}`,
+    title: p.title,
+    description: p.description,
+    category: p.category,
+    difficulty: opts.forceRank ? opts.forceRank : p.difficulty,
+    xp: Math.round((p.xp * boost) / 5) * 5,
+  }));
+}
+
+function rankInRange(d: QuestDifficulty, rank: [QuestDifficulty, QuestDifficulty]): boolean {
+  const i = DIFFICULTIES.indexOf(d);
+  const min = DIFFICULTIES.indexOf(rank[0]);
+  const max = DIFFICULTIES.indexOf(rank[1]);
+  return i >= min && i <= max;
 }

@@ -9,11 +9,26 @@ interface Props {
   onComplete: (q: Quest) => void;
   source: string;
   loading?: boolean;
+  onRegenerate: () => void;
+  regensLeft: number;
+  rankEasy: boolean;
+  onToggleRankEasy: () => void;
 }
 
 const SKELETON_COUNT = 5;
 
-export default function QuestList({ quests, completed, busy, onComplete, source, loading }: Props) {
+export default function QuestList({
+  quests,
+  completed,
+  busy,
+  onComplete,
+  source,
+  loading,
+  onRegenerate,
+  regensLeft,
+  rankEasy,
+  onToggleRankEasy,
+}: Props) {
   const isAI = source === "gemini" || source === "kilo" || source === "zen";
   const sorted = useMemo(
     () => [...quests].sort((a, b) => Number(completed.has(a.id)) - Number(completed.has(b.id))),
@@ -26,9 +41,26 @@ export default function QuestList({ quests, completed, busy, onComplete, source,
     <section className="quest-list">
       <div className="section-head">
         <h2>Quests de hoy</h2>
-        <span className={`quest-source ${isAI ? "gemini" : source}`}>
-          {isAI ? "⚡ generadas por IA" : source === "offline" ? "modo offline" : "El Sistema"}
-        </span>
+        <div className="quest-actions">
+          <button
+            className={`rank-toggle ${rankEasy ? "active" : ""}`}
+            onClick={onToggleRankEasy}
+            title="Genera quests de rango más bajo (F a D)"
+          >
+            ⬇ Bajar rango
+          </button>
+          <button
+            className="regen-btn"
+            onClick={onRegenerate}
+            disabled={regensLeft <= 0 || loading}
+            title="Pide quests nuevas a la IA (2 por día)"
+          >
+            ↻ Regenerar{regensLeft > 0 ? ` (${regensLeft})` : ""}
+          </button>
+          <span className={`quest-source ${isAI ? "gemini" : source}`}>
+            {isAI ? "⚡ generadas por IA" : source === "offline" ? "modo offline" : "El Sistema"}
+          </span>
+        </div>
       </div>
 
       {loading && (

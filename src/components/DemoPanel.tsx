@@ -1,5 +1,6 @@
 import { useReducer, useState } from "react";
 import { botManager } from "../lib/bots";
+import type { QuestDifficulty } from "../types";
 
 interface Props {
   playerName: string;
@@ -16,6 +17,12 @@ interface Props {
   onFullHeal: () => void;
   onKillRaid: () => void;
   onResetAll: () => void;
+  autopilot: boolean;
+  onToggleAutopilot: () => void;
+  revealWeakness: boolean;
+  onToggleRevealWeakness: () => void;
+  demoRank: QuestDifficulty | null;
+  onForceRank: (rank: QuestDifficulty | null) => void;
 }
 
 const BOT_DEFS = [
@@ -38,6 +45,12 @@ export default function DemoPanel({
   onFullHeal,
   onKillRaid,
   onResetAll,
+  autopilot,
+  onToggleAutopilot,
+  revealWeakness,
+  onToggleRevealWeakness,
+  demoRank,
+  onForceRank,
 }: Props) {
   const [open, setOpen] = useState(true);
   // botManager es un singleton mutable fuera de React: esta versión fuerza el
@@ -69,6 +82,9 @@ export default function DemoPanel({
             <button className="demo-btn" onClick={() => onGrantCoins(500)}>+500 oro</button>
             <button className="demo-btn" onClick={onAddStreak}>+1 streak</button>
             <button className="demo-btn" onClick={onNewDay}>Nuevo día</button>
+            <button className={`demo-btn ${autopilot ? "danger" : ""}`} onClick={onToggleAutopilot}>
+              {autopilot ? "■ Autopilot ON" : "Autopilot quests"}
+            </button>
             <button className="demo-btn danger" onClick={onResetAll}>Reset total</button>
           </div>
           <div className="demo-group" data-label="Torre">
@@ -79,10 +95,25 @@ export default function DemoPanel({
           <div className="demo-group" data-label="Combate">
             <button className="demo-btn" onClick={onFullHeal}>Rellenar HP/MP</button>
             <button className="demo-btn" disabled={!partyCode} onClick={onKillRaid}>Matar jefe raid</button>
+            <button className={`demo-btn ${revealWeakness ? "danger" : ""}`} onClick={onToggleRevealWeakness}>
+              {revealWeakness ? "👁 Debilidades visibles" : "Revelar debilidades"}
+            </button>
           </div>
           <div className="demo-group" data-label="IA">
             <button className="demo-btn" onClick={() => onSetSource("gemini")}>Fuente: IA</button>
             <button className="demo-btn" onClick={() => onSetSource("fallback")}>Fuente: fallback</button>
+            <button
+              className={`demo-btn ${demoRank === "F" ? "danger" : ""}`}
+              onClick={() => onForceRank(demoRank === "F" ? null : "F")}
+            >
+              Forzar rango: F
+            </button>
+            <button
+              className={`demo-btn ${demoRank === "B" ? "danger" : ""}`}
+              onClick={() => onForceRank(demoRank === "B" ? null : "B")}
+            >
+              Forzar rango: B
+            </button>
           </div>
           <div className="demo-group" data-label={`Bots (${botCount})`}>
             <button className="demo-btn" disabled={!partyCode} onClick={spawnBots}>

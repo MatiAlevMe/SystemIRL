@@ -31,6 +31,7 @@ export interface PlayerState {
   inventory: Record<string, number>;
   battle: { hp: number; mp: number; ex: number; exLevel: number; exXp: number };
   prefs: string[];
+  rankEasy: boolean;
 }
 
 export interface PartyMessage {
