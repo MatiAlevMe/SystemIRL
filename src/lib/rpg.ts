@@ -179,8 +179,12 @@ export const SPELLS: Spell[] = [
   { id: "sp-sagrada", name: "Explosión Sagrada", element: "sagrado", level: 9, cost: 11, dmg: 38 },
 ];
 
-export function spellsFor(level: number): Spell[] {
-  return SPELLS.filter((s) => level >= s.level);
+export function spellsFor(level: number, unlockedElements?: string[]): Spell[] {
+  return SPELLS.filter((s) => {
+    if (level < s.level) return false;
+    if (!unlockedElements || unlockedElements.length === 0) return true;
+    return unlockedElements.includes(s.element);
+  });
 }
 
 // ---- Habilidades EX por clase ---------------------------------
