@@ -1,8 +1,12 @@
-// RPG layer: al completar una quest, "El Sistema" invoca un monstruo escalado a la
-// dificultad. El combate es determinista (stats + nivel + arma + hechizo) y da oro
-// y a veces un item. Sin assets: solo DOM/CSS.
+// RPG layer — Fase 1: combate táctico por turnos.
+// El Sistema te enfrenta a monstruos escalados. Acciones: Atacar / Hechizo /
+// Defender / Ítem / EX / Huir. Las debilidades de raza están ocultas y se revelan
+// al golpear (One More), el MP se regenera cada turno y el gauge EX carga con la
+// pelea. No hay auto-heal tras la batalla: las curas vienen de quests, pociones
+// y level-up (restaura todo). Sin assets: solo DOM/CSS.
 
-import type { PlayerState, Quest, QuestCategory, QuestDifficulty } from "../types";
+import type { PlayerClass, PlayerState, Quest, QuestCategory, QuestDifficulty } from "../types";
+import { CLASS_ICON } from "../types";
 import { xpProgress } from "./xp";
 import { itemById, WEAPON_ITEMS, type ShopItem } from "./catalog";
 
@@ -42,7 +46,7 @@ export interface TowerResult {
 function towerDamage(player: PlayerState, quest: Quest): number {
   const { level } = xpProgress(player.xp);
   const stat = player.stats[quest.category] ?? 0;
-  const weapon = player.weapon ? itemById(player.weapon) : undefined;
+  const weapon = itemById(player.weapon);
   return 6 + level * 2 + Math.floor(stat / 10) + (weapon?.bonus?.dmg ?? 0) * 2;
 }
 
@@ -74,121 +78,11 @@ export function advanceTower(player: PlayerState, quest: Quest): TowerResult {
   return { floor, damage, coins, reward, cleared, conquered };
 }
 
-export interface Monster {
-  name: string;
-  hp: number;
-  coinsMin: number;
-  coinsMax: number;
-  dropChance: number;
-}
+// Oro que da completar una quest en la vida real (el oro ya no viene del auto-combate).
+const QUEST_COINS: Record<QuestDifficulty, number> = { F: 5, E: 8, D: 12, C: 18, B: 25 };
 
-export interface CombatResult {
-  monster: Monster;
-  victory: boolean;
-  damage: number;
-  coins: number;
-  drop: ShopItem | null;
-  spell: string | null;
-}
-
-const MONSTERS: Record<QuestDifficulty, Monster[]> = {
-  F: [
-    { name: "Lobo Gris", hp: 14, coinsMin: 10, coinsMax: 20, dropChance: 0.06 },
-    { name: "Slime Oscuro", hp: 12, coinsMin: 8, coinsMax: 18, dropChance: 0.08 },
-  ],
-  E: [
-    { name: "Esbirro del Sistema", hp: 22, coinsMin: 16, coinsMax: 30, dropChance: 0.1 },
-    { name: "Cuervo Espectral", hp: 20, coinsMin: 14, coinsMax: 28, dropChance: 0.12 },
-  ],
-  D: [
-    { name: "Guardia de Hierro", hp: 34, coinsMin: 28, coinsMax: 48, dropChance: 0.16 },
-    { name: "Golem de Piedra", hp: 38, coinsMin: 30, coinsMax: 52, dropChance: 0.14 },
-  ],
-  C: [
-    { name: "Caballero Corrupto", hp: 52, coinsMin: 45, coinsMax: 75, dropChance: 0.22 },
-    { name: "Matriarca Arácnida", hp: 48, coinsMin: 42, coinsMax: 70, dropChance: 0.24 },
-  ],
-  B: [
-    { name: "Jefe de Dungeon", hp: 80, coinsMin: 80, coinsMax: 130, dropChance: 0.35 },
-    { name: "Reina Sombría", hp: 88, coinsMin: 90, coinsMax: 140, dropChance: 0.38 },
-  ],
-};
-
-const SPELL_POOL = [
-  "Espada de Luz",
-  "Escudo de Sombras",
-  "Látigo de Fuego",
-  "Maná Tormenta",
-  "Golpe del Dragón",
-  "Explosión Arcano",
-];
-
-const SPELL_DMG = 18;
-const SPELL_CHANCE = 0.4;
-
-// God mode: flags sticky para que la demo sea reproducible.
-let forceWin = false;
-let forceSpell = false;
-
-export function setForceWin(v: boolean): void {
-  forceWin = v;
-}
-export function setForceSpell(v: boolean): void {
-  forceSpell = v;
-}
-
-export function pickMonster(difficulty: QuestDifficulty): Monster {
-  const pool = MONSTERS[difficulty] ?? MONSTERS.F;
-  return pool[Math.floor(Math.random() * pool.length)];
-}
-
-// Usa la categoría con más progreso si la pelea no viene de una quest concreta
-// (grind / jefe de torre).
-function bestCategory(p: PlayerState): QuestCategory {
-  return (Object.entries(p.stats) as [QuestCategory, number][]).sort((a, b) => b[1] - a[1])[0]?.[0] ?? "strength";
-}
-
-export function fightMonster(player: PlayerState, monster: Monster, category?: QuestCategory): CombatResult {
-  const { level } = xpProgress(player.xp);
-  const stat = player.stats[category ?? bestCategory(player)] ?? 0;
-  const weapon = player.weapon ? itemById(player.weapon) : undefined;
-
-  let damage = 12 + level * 3 + Math.floor(stat / 6) + (weapon?.bonus?.dmg ?? 0);
-  let spell: string | null = null;
-  if (forceSpell || Math.random() < SPELL_CHANCE) {
-    spell = SPELL_POOL[Math.floor(Math.random() * SPELL_POOL.length)];
-    damage += SPELL_DMG;
-  }
-
-  const victory = forceWin || damage >= monster.hp;
-  const coins = victory
-    ? monster.coinsMin + Math.floor(Math.random() * (monster.coinsMax - monster.coinsMin + 1))
-    : 0;
-
-  let drop: ShopItem | null = null;
-  if (victory && Math.random() < monster.dropChance) {
-    const pool = WEAPON_ITEMS.filter((w) => !player.owned.includes(w.id));
-    const choice = pool[Math.floor(Math.random() * pool.length)];
-    if (choice) drop = choice;
-  }
-
-  return { monster, victory, damage, coins, drop, spell };
-}
-
-export function resolveCombat(player: PlayerState, quest: Quest): CombatResult {
-  return fightMonster(player, pickMonster(quest.difficulty), quest.category);
-}
-
-// El jefe del piso como monstruo: su HP es el mismo del piso, así el daño de la
-// pelea se suma al daño passivo de las quests sobre la misma barra.
-export function bossMonsterForFloor(info: TowerFloor): Monster {
-  return {
-    name: info.boss,
-    hp: info.hp,
-    coinsMin: Math.round(info.reward * 0.5),
-    coinsMax: Math.round(info.reward * 0.8),
-    dropChance: 0.4,
-  };
+export function questCoins(difficulty: QuestDifficulty): number {
+  return QUEST_COINS[difficulty];
 }
 
 export function grindDifficulty(floor: number): QuestDifficulty {
@@ -199,10 +93,721 @@ export function grindDifficulty(floor: number): QuestDifficulty {
   return "F";
 }
 
-// Oro que da completar una quest en la vida real (ahora el oro no viene del
-// auto-combate). Escala con el rango.
-const QUEST_COINS: Record<QuestDifficulty, number> = { F: 5, E: 8, D: 12, C: 18, B: 25 };
+// ---- Elementos y razas ----------------------------------------
+export type Element = "fisico" | "fuego" | "hielo" | "electrico" | "sagrado" | "sombra";
+export type Race = "bestia" | "no-muerto" | "demonio" | "constructo" | "cazador";
 
-export function questCoins(difficulty: QuestDifficulty): number {
-  return QUEST_COINS[difficulty];
+export const ELEMENT_ICON: Record<Element, string> = {
+  fisico: "⚔️",
+  fuego: "🔥",
+  hielo: "❄️",
+  electrico: "⚡",
+  sagrado: "✨",
+  sombra: "🌑",
+};
+
+// Debilidad = x1.6 · resistencia = x0.6. La debilidad se revela al golpear.
+export const RACE_WEAKNESS: Record<Race, Element> = {
+  bestia: "fuego",
+  "no-muerto": "sagrado",
+  demonio: "sagrado",
+  constructo: "electrico",
+  cazador: "fisico",
+};
+
+export const RACE_RESIST: Record<Race, Element> = {
+  bestia: "hielo",
+  "no-muerto": "sombra",
+  demonio: "fuego",
+  constructo: "fisico",
+  cazador: "sagrado",
+};
+
+const WEAK_MULT = 1.6;
+const RESIST_MULT = 0.6;
+const MP_REGEN = 3;
+const EX_MAX_LEVEL = 5;
+
+export function exLevelFor(exXp: number): number {
+  return Math.min(EX_MAX_LEVEL, 1 + Math.floor(exXp / 40));
 }
+
+export function classEvolved(player: PlayerState): boolean {
+  return xpProgress(player.xp).level >= 5 || player.tower.floor >= 4;
+}
+
+// ---- Hechizos --------------------------------------------------
+export interface Spell {
+  id: string;
+  name: string;
+  element: Element;
+  level: number;
+  cost: number;
+  dmg?: number;
+  heal?: number;
+}
+
+export const SPELLS: Spell[] = [
+  { id: "sp-fuego", name: "Bola de Fuego", element: "fuego", level: 2, cost: 5, dmg: 22 },
+  { id: "sp-rayo", name: "Rayo", element: "electrico", level: 3, cost: 6, dmg: 26 },
+  { id: "sp-cura", name: "Cura", element: "sagrado", level: 4, cost: 5, heal: 25 },
+  { id: "sp-hielo", name: "Lanza de Hielo", element: "hielo", level: 5, cost: 8, dmg: 30 },
+  { id: "sp-sombra", name: "Colmillo de Sombra", element: "sombra", level: 7, cost: 9, dmg: 32 },
+  { id: "sp-sagrada", name: "Explosión Sagrada", element: "sagrado", level: 9, cost: 11, dmg: 38 },
+];
+
+export function spellsFor(level: number): Spell[] {
+  return SPELLS.filter((s) => level >= s.level);
+}
+
+// ---- Habilidades EX por clase ---------------------------------
+export interface ExSkill {
+  cls: PlayerClass;
+  name: string;
+  icon: string;
+  desc: string;
+  kind: "attack" | "guard" | "heal" | "multi";
+  dmg?: number;
+  healPct?: number;
+}
+
+export const EX_SKILLS: Record<PlayerClass, ExSkill> = {
+  guerrero: { cls: "guerrero", name: "Filo del Sistema", icon: "⚔️", kind: "attack", dmg: 3, desc: "Golpe físico 3× tu ataque." },
+  guardia: { cls: "guardia", name: "Muro del Sistema", icon: "🛡️", kind: "guard", desc: "La party recibe -70% de daño este turno." },
+  sabio: { cls: "sabio", name: "Luz del Sistema", icon: "✨", kind: "heal", healPct: 0.6, desc: "Cura 60% del HP máximo de toda la party." },
+  cazador: { cls: "cazador", name: "Aluvión del Sistema", icon: "🏹", kind: "multi", dmg: 1, desc: "3 impactos a todos los enemigos." },
+};
+
+// ---- Stats derivadas ------------------------------------------
+export interface CombatStats {
+  maxHp: number;
+  maxMp: number;
+  atk: number;
+  def: number;
+  crit: number;
+  magic: number;
+}
+
+export function combatStats(p: PlayerState): CombatStats {
+  const { level } = xpProgress(p.xp);
+  const weapon = itemById(p.weapon);
+  const armor = itemById(p.armor);
+  const trinket = itemById(p.trinket);
+  const aura = itemById(p.aura);
+  const s = p.stats;
+
+  let maxHp = 50 + s.vitality * 2 + level * 10;
+  let maxMp = 25 + s.intelligence * 1.5 + level * 4;
+  let atk = 10 + s.strength * 1.5 + level * 3 + (weapon?.bonus?.dmg ?? 0);
+  let def = 5 + s.vitality * 0.5 + level * 2 + (armor?.bonus?.def ?? 0);
+  let crit = 0.05 + p.coins * 0.002 + (trinket?.bonus?.crit ?? 0);
+  const magic = s.intelligence * 0.5;
+
+  if (p.cls === "guerrero") atk *= 1.2;
+  if (p.cls === "guardia") {
+    maxHp *= 1.25;
+    def *= 1.2;
+  }
+  if (p.cls === "sabio") maxMp *= 1.3;
+  if (p.cls === "cazador") crit *= 1.5;
+
+  maxHp += armor?.bonus?.hp ?? 0;
+  maxMp += trinket?.bonus?.mp ?? 0;
+  maxHp += maxHp * (aura?.bonus?.hpPct ?? 0);
+  atk += atk * (aura?.bonus?.atkPct ?? 0);
+  crit += aura?.bonus?.crit ?? 0;
+
+  return {
+    maxHp: Math.round(maxHp),
+    maxMp: Math.round(maxMp),
+    atk: Math.round(atk),
+    def: Math.round(def),
+    crit: Math.min(0.5, crit),
+    magic: Math.round(magic),
+  };
+}
+
+// Curas fuera del combate.
+export const RANK_HP: Record<QuestDifficulty, number> = { F: 10, E: 15, D: 20, C: 25, B: 30 };
+
+export function healFromQuest(player: PlayerState, difficulty: QuestDifficulty): PlayerState {
+  const { maxHp } = combatStats(player);
+  const amount = RANK_HP[difficulty];
+  return { ...player, battle: { ...player.battle, hp: Math.min(maxHp, player.battle.hp + amount) } };
+}
+
+export function restoreFull(player: PlayerState): PlayerState {
+  const { maxHp, maxMp } = combatStats(player);
+  return { ...player, battle: { ...player.battle, hp: maxHp, mp: maxMp } };
+}
+
+// ---- Enemigos --------------------------------------------------
+export interface Enemy {
+  id: string;
+  name: string;
+  race: Race;
+  attackElement: Element;
+  icon: string;
+  hp: number;
+  atk: number;
+  def: number;
+  coinsMin: number;
+  coinsMax: number;
+  exXp: number;
+  dropChance: number;
+  isBoss?: boolean;
+}
+
+export const GRIND_MONSTERS: Record<QuestDifficulty, Enemy[]> = {
+  F: [
+    { id: "f-lobo", name: "Lobo Gris", race: "bestia", attackElement: "fisico", icon: "🐺", hp: 16, atk: 6, def: 2, coinsMin: 10, coinsMax: 20, exXp: 2, dropChance: 0.06 },
+    { id: "f-slime", name: "Slime Oscuro", race: "no-muerto", attackElement: "sombra", icon: "🟣", hp: 14, atk: 5, def: 1, coinsMin: 8, coinsMax: 18, exXp: 2, dropChance: 0.08 },
+  ],
+  E: [
+    { id: "e-esbirro", name: "Esbirro del Sistema", race: "constructo", attackElement: "fisico", icon: "🗿", hp: 24, atk: 9, def: 3, coinsMin: 16, coinsMax: 30, exXp: 3, dropChance: 0.1 },
+    { id: "e-cuervo", name: "Cuervo Espectral", race: "no-muerto", attackElement: "sombra", icon: "🐦", hp: 22, atk: 8, def: 2, coinsMin: 14, coinsMax: 28, exXp: 3, dropChance: 0.12 },
+  ],
+  D: [
+    { id: "d-guardia", name: "Guardia de Hierro", race: "constructo", attackElement: "fisico", icon: "🛡️", hp: 36, atk: 13, def: 5, coinsMin: 28, coinsMax: 48, exXp: 5, dropChance: 0.16 },
+    { id: "d-golem", name: "Golem de Piedra", race: "constructo", attackElement: "fisico", icon: "🗿", hp: 40, atk: 12, def: 6, coinsMin: 30, coinsMax: 52, exXp: 5, dropChance: 0.14 },
+  ],
+  C: [
+    { id: "c-caballero", name: "Caballero Corrupto", race: "no-muerto", attackElement: "sombra", icon: "⚔️", hp: 56, atk: 18, def: 7, coinsMin: 45, coinsMax: 75, exXp: 8, dropChance: 0.22 },
+    { id: "c-matrona", name: "Matriarca Arácnida", race: "bestia", attackElement: "fisico", icon: "🕷️", hp: 52, atk: 17, def: 5, coinsMin: 42, coinsMax: 70, exXp: 8, dropChance: 0.24 },
+  ],
+  B: [
+    { id: "b-jefe", name: "Jefe de Dungeon", race: "demonio", attackElement: "fuego", icon: "👹", hp: 90, atk: 26, def: 9, coinsMin: 80, coinsMax: 130, exXp: 12, dropChance: 0.35 },
+    { id: "b-reina", name: "Reina Sombría", race: "no-muerto", attackElement: "sombra", icon: "👑", hp: 96, atk: 25, def: 8, coinsMin: 90, coinsMax: 140, exXp: 12, dropChance: 0.38 },
+  ],
+};
+
+export function pickEnemy(difficulty: QuestDifficulty): Enemy {
+  const pool = GRIND_MONSTERS[difficulty] ?? GRIND_MONSTERS.F;
+  return pool[Math.floor(Math.random() * pool.length)];
+}
+
+const FLOOR_RACES: Race[] = ["bestia", "no-muerto", "demonio", "constructo", "cazador"];
+
+export function bossEnemyForFloor(info: TowerFloor, hp?: number): Enemy {
+  const race = FLOOR_RACES[(info.floor - 1) % FLOOR_RACES.length];
+  return {
+    id: `boss-f${info.floor}`,
+    name: info.boss,
+    race,
+    attackElement: "fisico",
+    icon: "💀",
+    hp: hp ?? info.hp,
+    atk: 8 + info.floor * 5,
+    def: 2 + info.floor * 2,
+    coinsMin: Math.round(info.reward * 0.5),
+    coinsMax: Math.round(info.reward * 0.8),
+    exXp: 10 + info.floor * 5,
+    dropChance: 0.4,
+    isBoss: true,
+  };
+}
+
+export const RAID_BOSS_HP = 500;
+export const RAID_BOSS_NAME = "Monarca de la Colmena";
+
+export function raidBossEnemy(currentHp: number): Enemy {
+  return {
+    id: "raid-boss",
+    name: RAID_BOSS_NAME,
+    race: "demonio",
+    attackElement: "fuego",
+    icon: "👹",
+    hp: Math.max(1, currentHp),
+    atk: 32,
+    def: 10,
+    coinsMin: 150,
+    coinsMax: 300,
+    exXp: 40,
+    dropChance: 0.5,
+    isBoss: true,
+  };
+}
+
+// ---- Estado de batalla ----------------------------------------
+export interface Member {
+  id: string;
+  name: string;
+  icon: string;
+  cls: PlayerClass;
+  isBot: boolean;
+  level: number;
+  maxHp: number;
+  hp: number;
+  maxMp: number;
+  mp: number;
+  atk: number;
+  def: number;
+  crit: number;
+  magic: number;
+  gauge: number;
+  defending: boolean;
+  evolved: boolean;
+}
+
+export interface EnemyState {
+  id: string;
+  name: string;
+  race: Race;
+  attackElement: Element;
+  icon: string;
+  hp: number;
+  maxHp: number;
+  atk: number;
+  def: number;
+  coins: number;
+  exXp: number;
+  dropChance: number;
+  isBoss: boolean;
+  revealed: Element[];
+}
+
+export interface LogEntry {
+  id: number;
+  kind: "player" | "enemy" | "system" | "crit" | "weak" | "ex" | "heal";
+  text: string;
+}
+
+export type BattleMode = "grind" | "boss" | "raid";
+export type BattleOutcome = "victory" | "defeat" | "fled";
+
+export interface BattleState {
+  id: string;
+  mode: BattleMode;
+  party: Member[];
+  enemies: EnemyState[];
+  log: LogEntry[];
+  turn: number;
+  phase: "player" | "enemy";
+  oneMore: boolean;
+  shield: boolean;
+  result: BattleOutcome | null;
+  damageDealt: number;
+  usedItems: string[];
+}
+
+export interface BattleResult {
+  victory: boolean;
+  fled: boolean;
+  coins: number;
+  drop: ShopItem | null;
+  exXpGained: number;
+  damageDealt: number;
+}
+
+export type BattleAction =
+  | { type: "attack"; target: string }
+  | { type: "spell"; spellId: string; target: string }
+  | { type: "defend" }
+  | { type: "item"; itemId: string }
+  | { type: "ex"; target: string }
+  | { type: "flee" };
+
+export function buildParty(player: PlayerState, bots: Array<{ name: string; cls: PlayerClass; level: number }> = []): Member[] {
+  const cs = combatStats(player);
+  const level = xpProgress(player.xp).level;
+  const team: Member[] = [
+    {
+      id: "player",
+      name: player.name,
+      icon: CLASS_ICON[player.cls],
+      cls: player.cls,
+      isBot: false,
+      level,
+      maxHp: cs.maxHp,
+      hp: Math.min(cs.maxHp, player.battle.hp),
+      maxMp: cs.maxMp,
+      mp: Math.min(cs.maxMp, player.battle.mp),
+      atk: cs.atk,
+      def: cs.def,
+      crit: cs.crit,
+      magic: cs.magic,
+      gauge: 0,
+      defending: false,
+      evolved: classEvolved(player),
+    },
+  ];
+  for (const b of bots) {
+    team.push({
+      id: `bot-${b.name}`,
+      name: b.name,
+      icon: CLASS_ICON[b.cls],
+      cls: b.cls,
+      isBot: true,
+      level: b.level,
+      maxHp: 40 + b.level * 10,
+      hp: 40 + b.level * 10,
+      maxMp: 20 + b.level * 3,
+      mp: 20 + b.level * 3,
+      atk: 8 + b.level * 3,
+      def: 3 + b.level * 2,
+      crit: 0.05,
+      magic: Math.round(4 + b.level * 1.5),
+      gauge: 0,
+      defending: false,
+      evolved: b.level >= 5,
+    });
+  }
+  return team;
+}
+
+export function buildBattle(mode: BattleMode, enemies: Enemy[], party: Member[]): BattleState {
+  return {
+    id: `b-${Date.now()}-${Math.floor(Math.random() * 1e6)}`,
+    mode,
+    party,
+    enemies: enemies.map((e) => ({
+      id: e.id,
+      name: e.name,
+      race: e.race,
+      attackElement: e.attackElement,
+      icon: e.icon,
+      hp: e.hp,
+      maxHp: e.hp,
+      atk: e.atk,
+      def: e.def,
+      coins: e.coinsMin + Math.floor(Math.random() * (e.coinsMax - e.coinsMin + 1)),
+      exXp: e.exXp,
+      dropChance: e.dropChance,
+      isBoss: !!e.isBoss,
+      revealed: [],
+    })),
+    log: [],
+    turn: 1,
+    phase: "player",
+    oneMore: false,
+    shield: false,
+    result: null,
+    damageDealt: 0,
+    usedItems: [],
+  };
+}
+
+export function startGrindBattle(player: PlayerState, floor: number): BattleState {
+  return buildBattle("grind", [pickEnemy(grindDifficulty(floor))], buildParty(player));
+}
+
+export function startBossBattle(player: PlayerState): BattleState {
+  const info = floorInfo(player.tower.floor);
+  if (!info) return startGrindBattle(player, 1);
+  const remaining = Math.max(1, info.hp - player.tower.damage);
+  return buildBattle("boss", [bossEnemyForFloor(info, remaining)], buildParty(player));
+}
+
+export function startRaidBattle(player: PlayerState, currentHp: number, bots: Member[] = []): BattleState {
+  return buildBattle("raid", [raidBossEnemy(currentHp)], buildParty(player).concat(bots.filter((m) => m.id !== "player")));
+}
+
+// ---- Motor de combate ------------------------------------------
+function clone<T>(o: T): T {
+  return structuredClone(o);
+}
+
+function rand(min: number, max: number): number {
+  return min + Math.floor(Math.random() * (max - min + 1));
+}
+
+function pushLog(s: BattleState, kind: LogEntry["kind"], text: string): void {
+  s.log.push({ id: s.log.length, kind, text });
+}
+
+function livingEnemies(s: BattleState): EnemyState[] {
+  return s.enemies.filter((e) => e.hp > 0);
+}
+
+function livingParty(s: BattleState): Member[] {
+  return s.party.filter((m) => m.hp > 0);
+}
+
+function effMultiplier(enemy: EnemyState, element: Element): { mult: number; weak: boolean } {
+  if (RACE_WEAKNESS[enemy.race] === element) {
+    if (!enemy.revealed.includes(element)) enemy.revealed.push(element);
+    return { mult: WEAK_MULT, weak: true };
+  }
+  if (RACE_RESIST[enemy.race] === element) return { mult: RESIST_MULT, weak: false };
+  return { mult: 1, weak: false };
+}
+
+function hitEnemy(s: BattleState, attacker: Member, enemy: EnemyState, element: Element, baseDmg: number): { weak: boolean; crit: boolean } {
+  const crit = Math.random() < attacker.crit;
+  const { mult, weak } = effMultiplier(enemy, element);
+  let dmg = (baseDmg - (element === "fisico" ? enemy.def : 0)) * mult;
+  if (crit) dmg *= 2;
+  dmg = Math.max(1, Math.round(dmg));
+  enemy.hp = Math.max(0, enemy.hp - dmg);
+  if (s.mode !== "grind") s.damageDealt += dmg;
+  attacker.gauge = Math.min(100, attacker.gauge + 20);
+  const tag = crit ? " ¡CRÍTICO!" : weak ? " ¡DÉBIL!" : "";
+  pushLog(s, crit ? "crit" : weak ? "weak" : "player", `${attacker.name} golpeó a ${enemy.name}: -${dmg}${tag}`);
+  if (enemy.hp <= 0) pushLog(s, "enemy", `💀 ${enemy.name} cayó.`);
+  return { weak, crit };
+}
+
+function useItem(s: BattleState, p: Member, itemId: string): void {
+  const item = itemById(itemId);
+  if (!item || item.kind !== "potion") return;
+  s.usedItems.push(item.id);
+  const b = item.bonus ?? {};
+  const parts: string[] = [];
+  if (b.hp) {
+    const amount = Math.min(Math.round(b.hp), p.maxHp - p.hp);
+    p.hp += amount;
+    parts.push(`+${amount} HP`);
+  }
+  if (b.mp) {
+    const amount = Math.min(Math.round(b.mp), p.maxMp - p.mp);
+    p.mp += amount;
+    parts.push(`+${amount} MP`);
+  }
+  if (b.ex) {
+    p.gauge = Math.min(100, p.gauge + Math.round(b.ex));
+    parts.push(`EX +${b.ex}`);
+  }
+  pushLog(s, "heal", `${p.name} usó ${item.name} (${parts.join(" · ")})`);
+}
+
+function useEx(s: BattleState, p: Member, ex: ExSkill, targetId?: string): void {
+  const targets = livingEnemies(s);
+  const target = targets.find((e) => e.id === targetId) ?? targets[0];
+  p.gauge = 0;
+  if (ex.kind === "attack") {
+    if (target) hitEnemy(s, p, target, "fisico", p.atk * (ex.dmg ?? 1));
+    pushLog(s, "ex", `⭐ ¡${ex.name}!`);
+  } else if (ex.kind === "guard") {
+    s.shield = true;
+    pushLog(s, "ex", `🛡️ ¡${ex.name}! ${p.name} levanta el Muro del Sistema.`);
+  } else if (ex.kind === "heal") {
+    for (const m of s.party) {
+      if (m.hp <= 0) continue;
+      m.hp = Math.min(m.maxHp, m.hp + Math.round(m.maxHp * (ex.healPct ?? 0.5)));
+    }
+    pushLog(s, "heal", `✨ ¡${ex.name}! La party fue sanada.`);
+  } else if (ex.kind === "multi") {
+    for (const e of targets) {
+      for (let i = 0; i < 3; i++) hitEnemy(s, p, e, "fisico", p.atk * (ex.dmg ?? 1));
+    }
+    pushLog(s, "ex", `🏹 ¡${ex.name}! ${targets.length} enemigo(s) alcanzado(s).`);
+  }
+}
+
+function playerTurn(s: BattleState, action: BattleAction): { weakness: boolean } {
+  const p = s.party[0];
+  const enemies = livingEnemies(s);
+  let weakness = false;
+
+  switch (action.type) {
+    case "attack": {
+      const enemy = enemies.find((e) => e.id === action.target) ?? enemies[0];
+      if (enemy) weakness = hitEnemy(s, p, enemy, "fisico", p.atk).weak;
+      break;
+    }
+    case "spell": {
+      const spell = SPELLS.find((sp) => sp.id === action.spellId);
+      if (!spell) break;
+      if (p.mp < spell.cost) {
+        pushLog(s, "system", "No tienes MP suficiente.");
+        break;
+      }
+      p.mp -= spell.cost;
+      p.gauge = Math.min(100, p.gauge + 15);
+      if (spell.heal) {
+        const target = s.party.find((m) => m.id === action.target && m.hp > 0) ?? p;
+        const amount = Math.round((spell.heal ?? 0) + p.magic * (p.cls === "sabio" ? 1.3 : 1));
+        target.hp = Math.min(target.maxHp, target.hp + amount);
+        pushLog(s, "heal", `${p.name} lanzó ${spell.name}: +${amount} HP a ${target.name}`);
+      } else {
+        const enemy = enemies.find((e) => e.id === action.target) ?? enemies[0];
+        if (enemy) weakness = hitEnemy(s, p, enemy, spell.element, (spell.dmg ?? 0) + p.magic).weak;
+      }
+      break;
+    }
+    case "defend": {
+      p.defending = true;
+      p.gauge = Math.min(100, p.gauge + 15);
+      pushLog(s, "player", `${p.name} se defiende.`);
+      break;
+    }
+    case "item": {
+      useItem(s, p, action.itemId);
+      break;
+    }
+    case "ex": {
+      useEx(s, p, EX_SKILLS[p.cls], action.target);
+      break;
+    }
+    case "flee": {
+      if (Math.random() < 0.5) {
+        s.result = "fled";
+        pushLog(s, "system", `${p.name} huyó de la batalla.`);
+      } else {
+        pushLog(s, "system", "No pudiste huir.");
+        p.gauge = Math.min(100, p.gauge + 5);
+      }
+      break;
+    }
+  }
+  return { weakness };
+}
+
+function autoAct(s: BattleState, bot: Member): void {
+  const enemies = livingEnemies(s);
+  if (enemies.length === 0) return;
+  const low = bot.hp / bot.maxHp < 0.35;
+  const healSpell = spellsFor(bot.level).find((sp) => sp.heal);
+
+  if (bot.gauge >= 100) {
+    useEx(s, bot, EX_SKILLS[bot.cls], enemies[0].id);
+    return;
+  }
+  if (low && healSpell && bot.mp >= healSpell.cost) {
+    bot.mp -= healSpell.cost;
+    bot.gauge = Math.min(100, bot.gauge + 15);
+    const amount = Math.round((healSpell.heal ?? 0) + bot.magic * (bot.cls === "sabio" ? 1.3 : 1));
+    bot.hp = Math.min(bot.maxHp, bot.hp + amount);
+    pushLog(s, "heal", `${bot.name} se curó con ${healSpell.name} (+${amount} HP)`);
+    return;
+  }
+  if (low && Math.random() < 0.5) {
+    bot.defending = true;
+    bot.gauge = Math.min(100, bot.gauge + 15);
+    pushLog(s, "player", `${bot.name} se defiende.`);
+    return;
+  }
+  const known = enemies.find((e) => e.revealed.length > 0)?.revealed[0];
+  if (known) {
+    const sp = spellsFor(bot.level).find((x) => x.element === known && !x.heal && bot.mp >= x.cost);
+    if (sp) {
+      bot.mp -= sp.cost;
+      bot.gauge = Math.min(100, bot.gauge + 15);
+      hitEnemy(s, bot, enemies[0], sp.element, (sp.dmg ?? 0) + bot.magic);
+      return;
+    }
+  }
+  hitEnemy(s, bot, enemies[0], "fisico", bot.atk);
+}
+
+function enemyPhase(s: BattleState): void {
+  for (const e of s.enemies) {
+    if (e.hp <= 0) continue;
+    const alive = livingParty(s);
+    if (alive.length === 0) break;
+    const target = alive[Math.floor(Math.random() * alive.length)];
+    let dmg = e.atk - target.def + rand(0, 3);
+    if (target.defending) dmg *= 0.5;
+    if (s.shield) dmg *= 0.3;
+    dmg = Math.max(1, Math.round(dmg));
+    target.hp = Math.max(0, target.hp - dmg);
+    target.gauge = Math.min(100, target.gauge + 10);
+    pushLog(s, "enemy", `${e.icon} ${e.name} atacó a ${target.name}: -${dmg}`);
+    if (target.hp <= 0) pushLog(s, "enemy", `💀 ${target.name} cayó.`);
+  }
+  for (const m of s.party) m.defending = false;
+  s.shield = false;
+}
+
+function regenMp(s: BattleState): void {
+  for (const m of s.party) {
+    if (m.hp <= 0) continue;
+    m.mp = Math.min(m.maxMp, m.mp + MP_REGEN);
+  }
+}
+
+function buildResult(s: BattleState, kind: BattleOutcome): BattleResult {
+  const dead = s.enemies.filter((e) => e.hp <= 0);
+  const coins = dead.reduce((a, e) => a + e.coins, 0);
+  const exXpGained = dead.reduce((a, e) => a + e.exXp, 0);
+  let drop: ShopItem | null = null;
+  if (kind === "victory") {
+    const dropper = s.enemies.filter((e) => e.isBoss)[0] ?? dead[dead.length - 1];
+    if (dropper && Math.random() < dropper.dropChance) {
+      drop = WEAPON_ITEMS[Math.floor(Math.random() * WEAPON_ITEMS.length)] ?? null;
+    }
+  }
+  return {
+    victory: kind === "victory",
+    fled: kind === "fled",
+    coins,
+    drop,
+    exXpGained,
+    damageDealt: s.damageDealt,
+  };
+}
+
+// Una acción del jugador → aplica turno de player + bots + fase enemiga.
+export function act(state: BattleState, action: BattleAction): { state: BattleState; result: BattleResult | null } {
+  if (state.result) return { state, result: null };
+  const s = clone(state);
+  if (s.phase === "enemy") return { state: s, result: null };
+
+  const { weakness } = playerTurn(s, action);
+  if (s.result) return { state: s, result: buildResult(s, s.result) };
+
+  for (const bot of s.party) {
+    if (bot.id === "player" || bot.hp <= 0 || s.result) continue;
+    autoAct(s, bot);
+  }
+
+  if (s.enemies.every((e) => e.hp <= 0)) {
+    s.result = "victory";
+    return { state: s, result: buildResult(s, "victory") };
+  }
+
+  // One More: si el golpe del jugador acertó la debilidad, turno extra.
+  if (weakness) {
+    pushLog(s, "system", "🎯 ¡ONE MORE! Turno extra.");
+    regenMp(s);
+    s.oneMore = true;
+    s.phase = "player";
+    return { state: s, result: null };
+  }
+
+  enemyPhase(s);
+  regenMp(s);
+  s.phase = "player";
+  s.oneMore = false;
+  s.turn += 1;
+
+  if (s.party.every((m) => m.hp <= 0)) {
+    s.result = "defeat";
+    return { state: s, result: buildResult(s, "defeat") };
+  }
+  if (s.enemies.every((e) => e.hp <= 0)) {
+    s.result = "victory";
+    return { state: s, result: buildResult(s, "victory") };
+  }
+  return { state: s, result: null };
+}
+
+// Aplica el resultado de la batalla al jugador guardado.
+export function battlePersist(player: PlayerState, battle: BattleState, result: BattleResult): PlayerState {
+  const inventory = { ...player.inventory };
+  for (const id of battle.usedItems) {
+    const n = (inventory[id] ?? 0) - 1;
+    if (n <= 0) delete inventory[id];
+    else inventory[id] = n;
+  }
+  const exXp = player.battle.exXp + result.exXpGained;
+  const next: PlayerState = {
+    ...player,
+    coins: player.coins + result.coins,
+    inventory,
+    battle: {
+      ...player.battle,
+      exXp,
+      exLevel: exLevelFor(exXp),
+      hp: result.victory ? battle.party[0].hp : result.fled ? player.battle.hp : 1,
+      mp: battle.party[0].mp,
+      ex: 0,
+    },
+  };
+  if (result.drop && !next.owned.includes(result.drop.id)) {
+    next.owned = [...next.owned, result.drop.id];
+  }
+  return next;
+}
+
+export type { QuestCategory };

@@ -1,11 +1,14 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { clear as clearIdb } from "idb-keyval";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { Message } from "@portalsdk/core";
 import { useChannel } from "@portalsdk/react";
 import Onboarding from "./components/Onboarding";
 import QuestList from "./components/QuestList";
 import StatsPanel from "./components/StatsPanel";
+import CharacterPanel from "./components/CharacterPanel";
 import PartyPanel from "./components/PartyPanel";
 import LevelUpModal from "./components/LevelUpModal";
-import CombatModal from "./components/CombatModal";
+import BattleModal from "./components/BattleModal";
 import DemoPanel from "./components/DemoPanel";
 import ShopPanel from "./components/ShopPanel";
 import TowerPanel from "./components/TowerPanel";
@@ -23,15 +26,34 @@ import {
 import { fetchDailyQuests } from "./lib/quests";
 import { todayKey, xpForLevel, xpProgress } from "./lib/xp";
 import { botManager } from "./lib/bots";
-import { fightMonster, pickMonster, advanceTower, floorInfo, grindDifficulty, bossMonsterForFloor, questCoins, type CombatResult, type TowerResult } from "./lib/rpg";
-import { itemById, type ShopItem } from "./lib/catalog";
+import {
+  act,
+  advanceTower,
+  battlePersist,
+  floorInfo,
+  healFromQuest,
+  questCoins,
+  RAID_BOSS_HP,
+  restoreFull,
+  startBossBattle,
+  startGrindBattle,
+  startRaidBattle,
+  type BattleAction,
+  type BattleResult,
+  type BattleState,
+} from "./lib/rpg";
+import { itemById, RAID_AURAS, type ShopItem } from "./lib/catalog";
 import { weekRaid } from "./lib/raids";
-import { playComplete, playLevelUp, playVictory } from "./lib/sound";
+import { playComplete, playDefeat, playLevelUp, playVictory } from "./lib/sound";
 import { startMusic, toggleMusic, isMusicOn } from "./lib/music";
-import type { PartyMessage, PlayerState, Quest } from "./types";
+import type { PartyMessage, PlayerClass, PlayerState, Quest } from "./types";
 
 function weekRaidKey(): string {
   return "raid:" + weekRaid();
+}
+
+function raidContribKey(): string {
+  return "raid-contrib:" + weekRaid();
 }
 
 const TOAST_ICON: Record<string, string> = {
@@ -39,6 +61,7 @@ const TOAST_ICON: Record<string, string> = {
   done: "▸",
   raid: "⌁",
   join: "◈",
+  raidHit: "⚔",
 };
 
 function toastText(content: Partial<PartyMessage>): string {
@@ -51,9 +74,39 @@ function toastText(content: Partial<PartyMessage>): string {
       return `${content.name} completó la raid de la semana 🏆`;
     case "join":
       return `${content.name} se unió a la party`;
+    case "raidHit":
+      return content.dmg && content.dmg > 0
+        ? `⚔ ${content.name} golpeó al jefe de raid (-${content.dmg})`
+        : `🛡 ${content.name} hizo retroceder al jefe de raid`;
     default:
       return "";
   }
+}
+
+interface RaidState {
+  hp: number;
+  contributors: Set<string>;
+  lastHitAt: number;
+}
+
+// El HP del jefe de raid es el estado de la party: suma de mensajes raidHit.
+// Sin golpes en 24h, el jefe se regenera un 30% del daño hecho.
+function computeRaidState(messages: readonly Message<PartyMessage>[], raid: string): RaidState {
+  let dmg = 0;
+  const contributors = new Set<string>();
+  let lastHitAt = 0;
+  for (const m of messages) {
+    const c = m.content as Partial<PartyMessage> | null;
+    if (!c || c.kind !== "raidHit" || c.raid !== raid) continue;
+    if (typeof c.dmg === "number") dmg += c.dmg;
+    if (typeof c.name === "string") contributors.add(c.name);
+    lastHitAt = Math.max(lastHitAt, m.timestamp);
+  }
+  const idleMs = 24 * 3600 * 1000;
+  if (lastHitAt > 0 && Date.now() - lastHitAt > idleMs) {
+    dmg = Math.max(0, Math.round(dmg * 0.7));
+  }
+  return { hp: Math.max(0, RAID_BOSS_HP - dmg), contributors, lastHitAt };
 }
 
 export default function App() {
@@ -63,15 +116,15 @@ export default function App() {
   const [doneIds, setDoneIds] = useState<Set<string>>(new Set());
   const [completing, setCompleting] = useState(false);
   const [partyCode, setPartyCodeState] = useState<string>(() => localStorage.getItem("partyCode") ?? "");
-  const [tab, setTab] = useState<"daily" | "party" | "shop" | "tower">("daily");
+  const [tab, setTab] = useState<"daily" | "party" | "shop" | "tower" | "personaje">("daily");
   const [levelUp, setLevelUp] = useState<{ level: number } | null>(null);
   const [raidClaimed, setRaidClaimed] = useState(false);
   const [demoSource, setDemoSource] = useState<string | null>(null);
   const isDemo = typeof window !== "undefined" && window.location.hash.includes("demo");
   const [toast, setToast] = useState<{ id: string; text: string; kind: string } | null>(null);
   const lastMsgRef = useRef<string | null>(null);
-  const [combat, setCombat] = useState<CombatResult | null>(null);
-  const [combatTower, setCombatTower] = useState<TowerResult | null>(null);
+  const [battle, setBattle] = useState<BattleState | null>(null);
+  const [battleResult, setBattleResult] = useState<BattleResult | null>(null);
   const [xpFloat, setXpFloat] = useState<{ id: number; text: string } | null>(null);
   const floatIdRef = useRef(0);
   const [musicOn, setMusicOn] = useState(isMusicOn);
@@ -80,6 +133,8 @@ export default function App() {
     channelId: partyCode ? `party-${partyCode}` : undefined,
     history: 40,
   });
+
+  const raidState = useMemo(() => computeRaidState(party.messages, weekRaid()), [party.messages]);
 
   const joinedRef = useRef<string | null>(null);
 
@@ -137,8 +192,9 @@ export default function App() {
       streak: player.streak,
       title: player.title ?? undefined,
       color: player.color ?? undefined,
+      cls: player.cls,
     });
-  }, [partyCode, player?.name, player?.xp, player?.streak, player?.title, player?.color]);
+  }, [partyCode, player?.name, player?.xp, player?.streak, player?.title, player?.color, player?.cls]);
 
   // Anuncia la llegada cuando la party queda conectada.
   useEffect(() => {
@@ -189,12 +245,50 @@ export default function App() {
     };
   }, []);
 
+  // El HP del jefe de raid llega de la party: sincroniza una batalla raid abierta.
+  useEffect(() => {
+    if (raidState.hp <= 0) {
+      setBattle((prev) =>
+        prev && prev.mode === "raid" && !prev.result
+          ? { ...prev, result: "victory", enemies: prev.enemies.map((e) => ({ ...e, hp: 0 })) }
+          : prev,
+      );
+      return;
+    }
+    setBattle((prev) =>
+      prev && prev.mode === "raid" && !prev.result && prev.damageDealt === 0
+        ? { ...prev, enemies: prev.enemies.map((e) => ({ ...e, hp: Math.min(e.maxHp, raidState.hp) })) }
+        : prev,
+    );
+  }, [raidState.hp]);
+
+  // Recompensa exclusiva (aura) cuando el jefe de raid cae: solo contribuyentes.
+  useEffect(() => {
+    if (raidState.hp > 0 || !player || raidClaimed) return;
+    const contributed =
+      raidState.contributors.has(player.name) || localStorage.getItem(raidContribKey()) === player.name;
+    if (!contributed) return;
+    localStorage.setItem(weekRaidKey(), "1");
+    setRaidClaimed(true);
+    const aura = RAID_AURAS[Math.floor(Math.random() * RAID_AURAS.length)];
+    const next: PlayerState = {
+      ...player,
+      owned: player.owned.includes(aura.id) ? player.owned : [...player.owned, aura.id],
+      aura: player.aura ?? aura.id,
+    };
+    setPlayer(next);
+    void savePlayer(next);
+    setToast({ id: `raid-award-${Date.now()}`, text: `🏆 ¡Jefe de raid derrotado! Recompensa: ${aura.name}`, kind: "raid" });
+    if (partyCode) void party.send({ content: { kind: "raid", name: player.name, raid: weekRaid() } });
+  }, [raidState.hp, raidClaimed, player, partyCode]);
+
   const handleOnboard = useCallback(
-    async (name: string) => {
+    async (name: string, cls: PlayerClass) => {
       const p = emptyPlayer(name);
-      await savePlayer(p);
-      setPlayer(p);
-      await loadQuests(p);
+      const next = { ...p, cls };
+      await savePlayer(next);
+      setPlayer(next);
+      await loadQuests(next);
     },
     [loadQuests],
   );
@@ -206,7 +300,8 @@ export default function App() {
       try {
         const res = await completeQuest(player, q);
         const tower = advanceTower(res.player, q);
-        let next = res.player;
+        let next = healFromQuest(res.player, q.difficulty);
+        if (res.leveledUp) next = restoreFull(next);
         next = {
           ...next,
           tower: { floor: tower.floor, damage: tower.damage },
@@ -241,70 +336,86 @@ export default function App() {
     [player, completing, doneIds, partyCode],
   );
 
-  // ---- Combate manual (Torre) ----
+  // ---- Combate táctico (Torre + raid) ----
   const handleGrind = useCallback(() => {
     if (!player) return;
-    const result = fightMonster(player, pickMonster(grindDifficulty(player.tower.floor)));
-    if (result.victory) {
-      let next = { ...player, coins: player.coins + result.coins };
-      if (result.drop && !next.owned.includes(result.drop.id)) {
-        next = { ...next, owned: [...next.owned, result.drop.id] };
-      }
-      setPlayer(next);
-      void savePlayer(next);
-    }
-    setCombatTower(null);
-    setCombat(result);
-    if (result.victory) playVictory();
+    setBattleResult(null);
+    setBattle(startGrindBattle(player, player.tower.floor));
   }, [player]);
 
   const handleFightBoss = useCallback(() => {
     if (!player) return;
-    const info = floorInfo(player.tower.floor);
-    if (!info) return;
-    // La pelea ataca el HP restante del jefe (ya descontado el daño passivo de quests).
-    const remaining = Math.max(1, info.hp - player.tower.damage);
-    const result = fightMonster(player, { ...bossMonsterForFloor(info), hp: remaining });
-    let next = player;
-    let towerResult: TowerResult | null = null;
-    if (result.victory) {
-      next = { ...next, coins: next.coins + result.coins };
-      if (result.drop && !next.owned.includes(result.drop.id)) {
-        next = { ...next, owned: [...next.owned, result.drop.id] };
-      }
-      const newDamage = player.tower.damage + result.damage;
-      if (newDamage >= info.hp) {
-        const nextInfo = floorInfo(info.floor + 1);
-        next = {
-          ...next,
-          tower: nextInfo ? { floor: nextInfo.floor, damage: 0 } : { floor: info.floor, damage: info.hp },
-          coins: next.coins + info.reward,
-        };
-        towerResult = {
-          floor: info.floor,
-          damage: newDamage,
-          coins: info.reward,
-          reward: info.reward,
-          cleared: !!nextInfo,
-          conquered: !nextInfo,
-        };
-      } else {
-        next = { ...next, tower: { floor: info.floor, damage: newDamage } };
-      }
-      setPlayer(next);
-      void savePlayer(next);
-    }
-    setCombatTower(towerResult);
-    setCombat(result);
-    if (result.victory) playVictory();
+    setBattleResult(null);
+    setBattle(startBossBattle(player));
   }, [player]);
 
-  const handleClaimRaid = useCallback(() => {
-    if (!player || !partyCode || raidClaimed) return;
-    localStorage.setItem(weekRaidKey(), "1");
-    setRaidClaimed(true);
-    void party.send({ content: { kind: "raid", name: player.name, raid: weekRaid() } });
-  }, [player, partyCode, raidClaimed]);
+  const handleFightRaid = useCallback(() => {
+    if (!player || !partyCode) return;
+    setBattleResult(null);
+    setBattle(startRaidBattle(player, raidState.hp));
+  }, [player, partyCode, raidState.hp]);
+
+  const handleBattleAction = useCallback(
+    (action: BattleAction) => {
+      if (!player || !battle || battle.result) return;
+      const prevDamage = battle.damageDealt;
+      const { state, result } = act(battle, action);
+      setBattle(state);
+      if (!result) return;
+
+      let next = battlePersist(player, state, result);
+
+      // Jefe de torre: el daño de la pelea se suma a la barra del piso.
+      if (state.mode === "boss" && result.victory) {
+        const info = floorInfo(player.tower.floor);
+        if (info) {
+          const newDamage = player.tower.damage + result.damageDealt;
+          if (newDamage >= info.hp) {
+            const nextInfo = floorInfo(info.floor + 1);
+            next = {
+              ...next,
+              tower: nextInfo ? { floor: nextInfo.floor, damage: 0 } : { floor: info.floor, damage: info.hp },
+              coins: next.coins + info.reward,
+            };
+            setToast({
+              id: `tower-clear-${Date.now()}`,
+              text: `🏰 ¡Piso ${info.floor} conquistado! +${info.reward} oro`,
+              kind: "levelup",
+            });
+          } else {
+            next = { ...next, tower: { floor: info.floor, damage: newDamage } };
+          }
+        }
+      }
+
+      // Raid: cada golpe viaja como mensaje raidHit (mensajes = estado del jefe).
+      if (state.mode === "raid" && partyCode) {
+        const delta = state.damageDealt - prevDamage;
+        if (delta > 0) {
+          localStorage.setItem(raidContribKey(), player.name);
+          void party.send({ content: { kind: "raidHit", name: player.name, raid: weekRaid(), dmg: delta } });
+        } else if (!result.victory && state.damageDealt > 0) {
+          const regen = Math.round(state.damageDealt * 0.3);
+          if (regen > 0) {
+            void party.send({ content: { kind: "raidHit", name: player.name, raid: weekRaid(), dmg: -regen } });
+          }
+        }
+      }
+
+      if (result.victory) playVictory();
+      else playDefeat();
+
+      setBattleResult(result);
+      setPlayer(next);
+      void savePlayer(next);
+    },
+    [player, battle, partyCode, party],
+  );
+
+  const handleCloseBattle = useCallback(() => {
+    setBattle(null);
+    setBattleResult(null);
+  }, []);
 
   // ---- God mode (demo, solo visible con #demo en la URL) ----
   const handleGrantXp = useCallback(
@@ -348,15 +459,12 @@ export default function App() {
     [player],
   );
 
-  const handleAddStreak = useCallback(
-    async () => {
-      if (!player) return;
-      const next = { ...player, streak: player.streak + 1 };
-      setPlayer(next);
-      await savePlayer(next);
-    },
-    [player],
-  );
+  const handleAddStreak = useCallback(async () => {
+    if (!player) return;
+    const next = { ...player, streak: player.streak + 1 };
+    setPlayer(next);
+    await savePlayer(next);
+  }, [player]);
 
   const handleNewDay = useCallback(async () => {
     if (!player) return;
@@ -369,9 +477,43 @@ export default function App() {
     setDemoSource(source);
   }, []);
 
+  const handleFullHeal = useCallback(async () => {
+    if (!player) return;
+    const next = restoreFull(player);
+    setPlayer(next);
+    await savePlayer(next);
+  }, [player]);
+
+  const handleKillRaid = useCallback(async () => {
+    if (!player) return;
+    localStorage.setItem(raidContribKey(), player.name);
+    await savePlayer(player);
+    setToast({ id: `raid-kill-${Date.now()}`, text: "👹 El jefe de raid está en su último aliento…", kind: "raid" });
+    void party.send({ content: { kind: "raidHit", name: player.name, raid: weekRaid(), dmg: raidState.hp } });
+  }, [player, raidState.hp, party]);
+
+  const handleResetAll = useCallback(async () => {
+    await clearIdb();
+    localStorage.removeItem("partyCode");
+    botManager.clear();
+    window.location.hash = "";
+    window.location.reload();
+  }, []);
+
   const handleBuy = useCallback(
     (item: ShopItem) => {
-      if (!player || player.coins < item.price || player.owned.includes(item.id)) return;
+      if (!player || player.coins < item.price) return;
+      if (item.kind === "potion") {
+        const next = {
+          ...player,
+          coins: player.coins - item.price,
+          inventory: { ...player.inventory, [item.id]: (player.inventory[item.id] ?? 0) + 1 },
+        };
+        setPlayer(next);
+        void savePlayer(next);
+        return;
+      }
+      if (player.owned.includes(item.id)) return;
       const next: PlayerState = {
         ...player,
         coins: player.coins - item.price,
@@ -380,6 +522,8 @@ export default function App() {
       if (item.kind === "title") next.title = item.id;
       else if (item.kind === "color") next.color = item.id;
       else if (item.kind === "weapon") next.weapon = item.id;
+      else if (item.kind === "armor") next.armor = item.id;
+      else if (item.kind === "trinket") next.trinket = item.id;
       setPlayer(next);
       void savePlayer(next);
     },
@@ -393,6 +537,21 @@ export default function App() {
       if (item.kind === "title") next.title = item.id;
       else if (item.kind === "color") next.color = item.id;
       else if (item.kind === "weapon") next.weapon = item.id;
+      else if (item.kind === "armor") next.armor = item.id;
+      else if (item.kind === "trinket") next.trinket = item.id;
+      else if (item.kind === "aura") next.aura = item.id;
+      setPlayer(next);
+      void savePlayer(next);
+    },
+    [player],
+  );
+
+  const handleChangeClass = useCallback(
+    (cls: PlayerClass) => {
+      if (!player || player.cls === cls) return;
+      const cost = 1000 + xpProgress(player.xp).level * 200;
+      if (player.coins < cost) return;
+      const next = { ...player, coins: player.coins - cost, cls };
       setPlayer(next);
       void savePlayer(next);
     },
@@ -500,6 +659,9 @@ export default function App() {
         <button className={tab === "daily" ? "active" : ""} onClick={() => setTab("daily")}>
           Quests
         </button>
+        <button className={tab === "personaje" ? "active" : ""} onClick={() => setTab("personaje")}>
+          Personaje
+        </button>
         <button className={tab === "party" ? "active" : ""} onClick={() => setTab("party")}>
           Party{partyCode ? ` · ${partyCode}` : ""}
         </button>
@@ -524,8 +686,15 @@ export default function App() {
               source={demoSource ?? questSource}
             />
           </>
+        ) : tab === "personaje" ? (
+          <CharacterPanel player={player} />
         ) : tab === "shop" ? (
-          <ShopPanel player={player} onBuy={handleBuy} onEquip={handleEquip} />
+          <ShopPanel
+            player={player}
+            onBuy={handleBuy}
+            onEquip={handleEquip}
+            onChangeClass={handleChangeClass}
+          />
         ) : tab === "tower" ? (
           <TowerPanel player={player} onGrind={handleGrind} onFightBoss={handleFightBoss} />
         ) : (
@@ -538,8 +707,9 @@ export default function App() {
             messages={party.messages}
             status={party.status}
             raid={weekRaid()}
+            raidHp={raidState.hp}
             raidClaimed={raidClaimed}
-            onClaimRaid={handleClaimRaid}
+            onFightRaid={handleFightRaid}
           />
         )}
       </main>
@@ -563,8 +733,14 @@ export default function App() {
 
       {levelUp && <LevelUpModal level={levelUp.level} onClose={() => setLevelUp(null)} />}
 
-      {combat && (
-        <CombatModal result={combat} tower={combatTower} onClose={() => setCombat(null)} />
+      {battle && (
+        <BattleModal
+          battle={battle}
+          player={player}
+          result={battleResult}
+          onAction={handleBattleAction}
+          onClose={handleCloseBattle}
+        />
       )}
 
       {isDemo && player && (
@@ -580,6 +756,9 @@ export default function App() {
           onSetSource={handleSetSource}
           onTowerHit={handleTowerHit}
           onTowerFloor={handleTowerFloor}
+          onFullHeal={handleFullHeal}
+          onKillRaid={handleKillRaid}
+          onResetAll={handleResetAll}
         />
       )}
     </div>

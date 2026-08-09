@@ -1,5 +1,5 @@
 import type { PlayerState } from "../types";
-import { TOWER_FLOORS, floorInfo } from "../lib/rpg";
+import { TOWER_FLOORS, combatStats, floorInfo } from "../lib/rpg";
 
 interface Props {
   player: PlayerState;
@@ -13,6 +13,9 @@ export default function TowerPanel({ player, onGrind, onFightBoss }: Props) {
   const currentHp = current ? current.hp : 0;
   const pct = current && currentHp > 0 ? Math.min(100, Math.round((damage / currentHp) * 100)) : 100;
   const conquered = !!current && damage >= currentHp;
+  const { maxHp, maxMp } = combatStats(player);
+  const hpPct = Math.round((player.battle.hp / maxHp) * 100);
+  const mpPct = Math.round((player.battle.mp / maxMp) * 100);
 
   return (
     <section className="tower">
@@ -32,6 +35,20 @@ export default function TowerPanel({ player, onGrind, onFightBoss }: Props) {
           <div className="tower-boss-meta">
             <span>{damage}/{currentHp} daño</span>
             <span>Recompensa: 💰 {current.reward}</span>
+          </div>
+          <div className="tower-battle-status">
+            <span className="tower-hp">
+              <span className="mini-bar">
+                <span className="mini-fill hp" style={{ width: `${hpPct}%` }} />
+              </span>
+              {player.battle.hp}/{maxHp} HP
+            </span>
+            <span className="tower-mp">
+              <span className="mini-bar">
+                <span className="mini-fill mp" style={{ width: `${mpPct}%` }} />
+              </span>
+              {player.battle.mp}/{maxMp} MP
+            </span>
           </div>
           <div className="tower-actions">
             <button className="ghost-btn" onClick={onGrind}>⚔ Luchar</button>
@@ -66,9 +83,8 @@ export default function TowerPanel({ player, onGrind, onFightBoss }: Props) {
       </div>
 
       <p className="panel-note">
-        Cada quest completada daña al jefe del piso actual. También podés luchar directamente:
-        <strong>⚔ Luchar</strong> derrota monstruos por oro y botín, y{" "}
-        <strong>👹 Luchar contra jefe</strong> golpea al jefe para limpiar el piso.
+        Cada quest completada daña al jefe del piso actual y cura un poco de HP. Luchar es por turnos:
+        probá elementos para revelar la debilidad de cada monstruo (One More). Si caes, quedás con 1 HP.
       </p>
     </section>
   );

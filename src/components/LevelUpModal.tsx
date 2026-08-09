@@ -21,7 +21,7 @@ export default function LevelUpModal({ level, onClose }: Props) {
         <div className="levelup-kicker">NIVEL ALCANZADO</div>
         <div className="levelup-number">{level}</div>
         <div className="levelup-title">El Sistema reconoce tu poder</div>
-        <p>Tus stats aumentan. La party ya fue notificada en tiempo real.</p>
+        <p>Tus stats aumentan y tu HP/MP se restaura por completo. La party ya fue notificada en tiempo real.</p>
         <button className="primary-btn" onClick={onClose} autoFocus>
           Continuar ▸
         </button>

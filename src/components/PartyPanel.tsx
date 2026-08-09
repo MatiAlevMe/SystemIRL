@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import type { AggregatePresence, ChannelStatus, DetailedPresence, Message } from "@portalsdk/core";
 import type { PartyMessage } from "../types";
-import { RAID_TARGET } from "../lib/raids";
+import { RAID_BOSS_HP, RAID_BOSS_NAME } from "../lib/rpg";
 
 interface Props {
   partyCode: string;
@@ -12,8 +12,9 @@ interface Props {
   messages: readonly Message<PartyMessage>[];
   status: ChannelStatus;
   raid: string;
+  raidHp: number;
   raidClaimed: boolean;
-  onClaimRaid: () => void;
+  onFightRaid: () => void;
 }
 
 interface BoardRow {
@@ -34,8 +35,9 @@ export default function PartyPanel({
   messages,
   status,
   raid,
+  raidHp,
   raidClaimed,
-  onClaimRaid,
+  onFightRaid,
 }: Props) {
   const [draft, setDraft] = useState("");
   const [copied, setCopied] = useState(false);
@@ -80,16 +82,17 @@ export default function PartyPanel({
 
   const onlineCount = presence ? presence.count : 0;
 
-  const raidProgress = useMemo(() => {
+  const raidContributors = useMemo(() => {
     const raiders = new Set<string>();
     for (const m of messages) {
-      const c = m.content as { kind?: unknown; name?: unknown; raid?: unknown } | null;
-      if (c && c.kind === "raid" && c.raid === raid && typeof c.name === "string") raiders.add(c.name);
+      const c = m.content as Partial<PartyMessage> | null;
+      if (c && c.kind === "raidHit" && c.raid === raid && typeof c.name === "string") raiders.add(c.name);
     }
     return raiders.size;
   }, [messages, raid]);
 
-  const raidPct = Math.min(100, Math.round((raidProgress / RAID_TARGET) * 100));
+  const raidPct = Math.min(100, Math.max(0, Math.round((1 - raidHp / RAID_BOSS_HP) * 100)));
+  const raidDead = raidHp <= 0;
 
   return (
     <section className="party">
@@ -99,7 +102,7 @@ export default function PartyPanel({
           <h2>Únete a tu party</h2>
           <p>
             Un canal en tiempo real conecta a todos los jugadores: presencia, notificaciones de
-            nivel y raid semanal. Abre esta app en una segunda pestaña o comparte el código.
+            nivel y raid de la semana. Abre esta app en una segunda pestaña o comparte el código.
           </p>
           <form
             className="name-form"
@@ -192,6 +195,17 @@ export default function PartyPanel({
                         </li>
                       );
                     }
+                    if (c.kind === "raidHit") {
+                      return (
+                        <li key={m.id} className="feed-item raid">
+                          <span className="f-ico">⚔</span>
+                          <span>
+                            <strong>{c.name}</strong>{" "}
+                            {c.dmg && c.dmg > 0 ? `golpeó al jefe de raid (-${c.dmg})` : "hizo retroceder al jefe de raid"}
+                          </span>
+                        </li>
+                      );
+                    }
                     return (
                       <li key={m.id} className="feed-item join">
                         <span className="f-ico">◈</span>
@@ -206,19 +220,23 @@ export default function PartyPanel({
             <div className="panel raid">
               <h3>Raid de la semana</h3>
               <div className="raid-body">
-                <div className="raid-icon">⌁</div>
+                <div className="raid-icon">👹</div>
                 <div className="raid-title">{raid}</div>
-                <p>Objetivo grupal. Un jugador completa la raid y toda la party lo ve en tiempo real.</p>
+                <p>
+                  {RAID_BOSS_NAME} tiene <strong>{RAID_BOSS_HP} HP</strong> compartidos. El daño de toda la party
+                  viaja en tiempo real; el HP es el estado del canal.
+                </p>
                 <div className="raid-progress">
                   <div className="raid-progress-bar">
                     <div className="raid-progress-fill" style={{ width: `${raidPct}%` }} />
                   </div>
                   <span className="raid-progress-label">
-                    {raidProgress}/{RAID_TARGET} jugadores
+                    {raidDead ? "Derrotado" : `${Math.max(0, Math.ceil(raidHp))}/${RAID_BOSS_HP} HP`} · {raidContributors}{" "}
+                    contribuyente{raidContributors === 1 ? "" : "s"}
                   </span>
                 </div>
-                <button className="primary-btn" disabled={raidClaimed} onClick={onClaimRaid}>
-                  {raidClaimed ? "✓ Raid completada" : "Completar raid"}
+                <button className="primary-btn" disabled={raidClaimed} onClick={onFightRaid}>
+                  {raidClaimed ? "✓ Aura obtenida" : raidDead ? "Reclamar (reaparece)" : "⚔ Luchar vs jefe de raid"}
                 </button>
               </div>
             </div>

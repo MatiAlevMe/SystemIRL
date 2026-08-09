@@ -21,6 +21,13 @@ export function emptyPlayer(name: string): PlayerState {
     weapon: null,
     owned: [],
     tower: { floor: 1, damage: 0 },
+    cls: "guerrero",
+    armor: null,
+    trinket: null,
+    aura: null,
+    inventory: {},
+    battle: { hp: 60, mp: 30, ex: 0, exLevel: 1, exXp: 0 },
+    prefs: [],
   };
 }
 
@@ -37,6 +44,13 @@ export function normalizePlayer(p: Partial<PlayerState> | null | undefined): Pla
     tower: { ...base.tower, ...p.tower },
     owned: Array.isArray(p.owned) ? p.owned : [],
     history: Array.isArray(p.history) ? p.history : [],
+    cls: p.cls ?? base.cls,
+    armor: p.armor ?? null,
+    trinket: p.trinket ?? null,
+    aura: p.aura ?? null,
+    inventory: p.inventory && typeof p.inventory === "object" ? p.inventory : {},
+    battle: { ...base.battle, ...p.battle },
+    prefs: Array.isArray(p.prefs) ? p.prefs : [],
   };
 }
 

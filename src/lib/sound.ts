@@ -58,3 +58,18 @@ export function playLevelUp(): void {
   tone(c, 659.25, 0.24, 0.14, "triangle", 0.09);
   tone(c, 783.99, 0.36, 0.3, "triangle", 0.11);
 }
+
+export function playHit(): void {
+  const c = ensureCtx();
+  if (!c) return;
+  tone(c, 220, 0, 0.08, "square", 0.06);
+  tone(c, 180, 0.06, 0.1, "square", 0.05);
+}
+
+export function playDefeat(): void {
+  const c = ensureCtx();
+  if (!c) return;
+  tone(c, 330, 0, 0.18, "sawtooth", 0.07);
+  tone(c, 220, 0.18, 0.28, "sawtooth", 0.08);
+  tone(c, 147, 0.4, 0.4, "sawtooth", 0.09);
+}

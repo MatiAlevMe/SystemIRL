@@ -1,6 +1,5 @@
 import { useReducer, useState } from "react";
 import { botManager } from "../lib/bots";
-import { setForceSpell, setForceWin } from "../lib/rpg";
 
 interface Props {
   playerName: string;
@@ -14,6 +13,9 @@ interface Props {
   onSetSource: (source: string) => void;
   onTowerHit: () => void;
   onTowerFloor: (floor: number) => void;
+  onFullHeal: () => void;
+  onKillRaid: () => void;
+  onResetAll: () => void;
 }
 
 const BOT_DEFS = [
@@ -33,26 +35,17 @@ export default function DemoPanel({
   onSetSource,
   onTowerHit,
   onTowerFloor,
+  onFullHeal,
+  onKillRaid,
+  onResetAll,
 }: Props) {
   const [open, setOpen] = useState(true);
-  const [win, setWin] = useState(false);
-  const [spell, setSpell] = useState(false);
   // botManager es un singleton mutable fuera de React: esta versión fuerza el
   // re-render tras spawn/clear para que el label de bots y los botones se activen.
   const [, forceRender] = useReducer((x: number) => x + 1, 0);
 
   const botCount = botManager.count;
   const firstBotName = botManager.names()[0];
-
-  const toggleWin = () => {
-    setWin(!win);
-    setForceWin(!win);
-  };
-
-  const toggleSpell = () => {
-    setSpell(!spell);
-    setForceSpell(!spell);
-  };
 
   const spawnBots = () => {
     if (!partyCode) return;
@@ -76,6 +69,7 @@ export default function DemoPanel({
             <button className="demo-btn" onClick={() => onGrantCoins(500)}>+500 oro</button>
             <button className="demo-btn" onClick={onAddStreak}>+1 streak</button>
             <button className="demo-btn" onClick={onNewDay}>Nuevo día</button>
+            <button className="demo-btn danger" onClick={onResetAll}>Reset total</button>
           </div>
           <div className="demo-group" data-label="Torre">
             <button className="demo-btn" onClick={onTowerHit}>Golpear jefe</button>
@@ -83,14 +77,8 @@ export default function DemoPanel({
             <button className="demo-btn" onClick={() => onTowerFloor(5)}>Piso 5</button>
           </div>
           <div className="demo-group" data-label="Combate">
-            <label className="demo-check">
-              <input type="checkbox" checked={win} onChange={toggleWin} />
-              Victoria forzada
-            </label>
-            <label className="demo-check">
-              <input type="checkbox" checked={spell} onChange={toggleSpell} />
-              Hechizo garantizado
-            </label>
+            <button className="demo-btn" onClick={onFullHeal}>Rellenar HP/MP</button>
+            <button className="demo-btn" disabled={!partyCode} onClick={onKillRaid}>Matar jefe raid</button>
           </div>
           <div className="demo-group" data-label="IA">
             <button className="demo-btn" onClick={() => onSetSource("gemini")}>Fuente: IA</button>
