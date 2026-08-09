@@ -1352,3 +1352,40 @@ button {
   letter-spacing: 0.12em;
   color: #b34cff;
 }
+
+/* ---------- Polish: +XP float + copy code ---------- */
+.xp-float {
+  position: fixed;
+  left: 50%;
+  bottom: 80px;
+  transform: translateX(-50%);
+  z-index: 850;
+  font-size: 15px;
+  font-weight: 800;
+  color: #ffd166;
+  text-shadow: 0 2px 12px rgba(255, 209, 102, 0.4);
+  pointer-events: none;
+  animation: float-up 1.6s ease-out forwards;
+}
+
+@keyframes float-up {
+  0% { opacity: 0; transform: translateX(-50%) translateY(10px); }
+  15% { opacity: 1; }
+  100% { opacity: 0; transform: translateX(-50%) translateY(-46px); }
+}
+
+.copy-code {
+  margin-left: 8px;
+  padding: 2px 7px;
+  border-radius: 6px;
+  border: 1px solid rgba(61, 218, 215, 0.4);
+  background: rgba(61, 218, 215, 0.1);
+  color: #3ddad7;
+  font-size: 11px;
+  cursor: pointer;
+  vertical-align: middle;
+}
+
+.copy-code:hover {
+  background: rgba(61, 218, 215, 0.22);
+}

@@ -26,6 +26,7 @@ import { botManager } from "./lib/bots";
 import { resolveCombat, advanceTower, floorInfo, type CombatResult, type TowerResult } from "./lib/rpg";
 import { itemById, type ShopItem } from "./lib/catalog";
 import { weekRaid } from "./lib/raids";
+import { playComplete, playLevelUp, playVictory } from "./lib/sound";
 import type { PartyMessage, PlayerState, Quest } from "./types";
 
 function weekRaidKey(): string {
@@ -70,6 +71,8 @@ export default function App() {
   const lastMsgRef = useRef<string | null>(null);
   const [combat, setCombat] = useState<CombatResult | null>(null);
   const [combatTower, setCombatTower] = useState<TowerResult | null>(null);
+  const [xpFloat, setXpFloat] = useState<{ id: number; text: string } | null>(null);
+  const floatIdRef = useRef(0);
 
   const party = useChannel<PartyMessage>({
     channelId: partyCode ? `party-${partyCode}` : undefined,
@@ -167,6 +170,12 @@ export default function App() {
     return () => clearTimeout(t);
   }, [toast]);
 
+  useEffect(() => {
+    if (!xpFloat) return;
+    const t = setTimeout(() => setXpFloat(null), 1600);
+    return () => clearTimeout(t);
+  }, [xpFloat]);
+
   const handleOnboard = useCallback(
     async (name: string) => {
       const p = emptyPlayer(name);
@@ -198,6 +207,7 @@ export default function App() {
         if (combat.victory) {
           setCombat(combat);
           setCombatTower(tower);
+          playVictory();
         }
         setPlayer(next);
         await savePlayer(next);
@@ -205,6 +215,12 @@ export default function App() {
         done.add(q.id);
         setDoneIds(done);
         await saveDoneToday(todayKey(), [...done]);
+        playComplete();
+        if (res.leveledUp) playLevelUp();
+        setXpFloat({
+          id: ++floatIdRef.current,
+          text: `+${res.xpGained} XP · +${combat.coins + tower.coins} oro`,
+        });
 
         if (partyCode) {
           void party.send({ content: { kind: "done", name: player.name, quest: q.title } });
@@ -252,6 +268,7 @@ export default function App() {
     setPlayer(res.player);
     if (res.leveledUp) {
       setLevelUp({ level: res.level });
+      playLevelUp();
       if (partyCode) {
         void party.send({
           content: { kind: "levelup", name: player.name, level: res.level, xp: res.player.xp },
@@ -462,6 +479,12 @@ export default function App() {
       <footer className="foot">
         SystemIRL · The Realtime Hackathon by Portal · IA + tiempo real con Portal
       </footer>
+
+      {xpFloat && (
+        <div key={xpFloat.id} className="xp-float">
+          {xpFloat.text}
+        </div>
+      )}
 
       {toast && (
         <div key={toast.id} className={`party-toast ${toast.kind}`} onClick={() => setToast(null)}>

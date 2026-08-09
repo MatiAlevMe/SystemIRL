@@ -38,6 +38,17 @@ export default function PartyPanel({
   onClaimRaid,
 }: Props) {
   const [draft, setDraft] = useState("");
+  const [copied, setCopied] = useState(false);
+
+  const copyCode = async () => {
+    try {
+      await navigator.clipboard.writeText(partyCode);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      /* clipboard no disponible */
+    }
+  };
 
   const board = useMemo<BoardRow[]>(() => {
     if (!presence || presence.kind !== "detailed") return [];
@@ -111,7 +122,12 @@ export default function PartyPanel({
         <div className="party-live">
           <div className="party-head">
             <div>
-              <div className="party-title">PARTY — {partyCode}</div>
+              <div className="party-title">
+                PARTY — {partyCode}
+                <button className="copy-code" onClick={copyCode} title="Copiar código">
+                  {copied ? "✓" : "⧉"}
+                </button>
+              </div>
               <div className="party-sub">
                 <span className={`status-dot ${status}`} />
                 {onlineCount} jugador{onlineCount === 1 ? "" : "es"} conectado{onlineCount === 1 ? "" : "s"} en vivo
