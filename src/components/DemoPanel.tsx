@@ -1,11 +1,10 @@
-import { useState } from "react";
+import { useReducer, useState } from "react";
 import { botManager } from "../lib/bots";
 import { setForceSpell, setForceWin } from "../lib/rpg";
 
 interface Props {
   playerName: string;
   partyCode: string;
-  botCount: number;
   raid: string;
   onGrantXp: (amount: number) => void;
   onForceLevelUp: () => void;
@@ -25,7 +24,6 @@ const BOT_DEFS = [
 export default function DemoPanel({
   playerName,
   partyCode,
-  botCount,
   raid,
   onGrantXp,
   onForceLevelUp,
@@ -39,6 +37,12 @@ export default function DemoPanel({
   const [open, setOpen] = useState(true);
   const [win, setWin] = useState(false);
   const [spell, setSpell] = useState(false);
+  // botManager es un singleton mutable fuera de React: esta versión fuerza el
+  // re-render tras spawn/clear para que el label de bots y los botones se activen.
+  const [, forceRender] = useReducer((x: number) => x + 1, 0);
+
+  const botCount = botManager.count;
+  const firstBotName = botManager.names()[0];
 
   const toggleWin = () => {
     setWin(!win);
@@ -53,9 +57,8 @@ export default function DemoPanel({
   const spawnBots = () => {
     if (!partyCode) return;
     BOT_DEFS.forEach((b) => botManager.spawn(partyCode, b.name, { name: b.name, level: b.level, xp: b.xp, streak: 1 }));
+    forceRender();
   };
-
-  const firstBot = () => botManager.names()[0];
 
   return (
     <div className={`demo-panel ${open ? "open" : "closed"}`}>
@@ -99,26 +102,33 @@ export default function DemoPanel({
             </button>
             <button
               className="demo-btn"
-              disabled={!firstBot()}
-              onClick={() => firstBot() && botManager.complete(firstBot())}
+              disabled={!firstBotName}
+              onClick={() => firstBotName && botManager.complete(firstBotName)}
             >
               Bot quest
             </button>
             <button
               className="demo-btn"
-              disabled={!firstBot()}
-              onClick={() => firstBot() && botManager.levelUp(firstBot())}
+              disabled={!firstBotName}
+              onClick={() => firstBotName && botManager.levelUp(firstBotName)}
             >
               Bot level-up
             </button>
             <button
               className="demo-btn"
-              disabled={!firstBot()}
-              onClick={() => firstBot() && botManager.raid(firstBot(), raid)}
+              disabled={!firstBotName}
+              onClick={() => firstBotName && botManager.raid(firstBotName, raid)}
             >
               Bot raid
             </button>
-            <button className="demo-btn" disabled={botCount === 0} onClick={() => botManager.clear()}>
+            <button
+              className="demo-btn"
+              disabled={botCount === 0}
+              onClick={() => {
+                botManager.clear();
+                forceRender();
+              }}
+            >
               Limpiar bots
             </button>
           </div>

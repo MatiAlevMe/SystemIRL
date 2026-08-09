@@ -57,7 +57,21 @@ class BotManager {
   spawn(code: string, name: string, meta: PartyMeta): boolean {
     if (!PORTAL_API_KEY || !code || this.bots.has(name)) return false;
     const channel = this.channelFor(code, name, meta);
-    void channel.send({ content: { kind: "join", name } });
+    const announce = () => {
+      void channel.send({ content: { kind: "join", name } }).catch(() => {});
+    };
+    // El join se publica cuando el canal está listo (la presencia ya quedó registrada),
+    // no inmediatamente tras acquire().
+    if (channel.status === "ready") {
+      announce();
+    } else {
+      const unsub = channel.on("status", (s) => {
+        if (s === "ready") {
+          unsub();
+          announce();
+        }
+      });
+    }
     return true;
   }
 

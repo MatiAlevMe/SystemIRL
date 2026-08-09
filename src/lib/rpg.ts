@@ -2,7 +2,7 @@
 // dificultad. El combate es determinista (stats + nivel + arma + hechizo) y da oro
 // y a veces un item. Sin assets: solo DOM/CSS.
 
-import type { PlayerState, Quest, QuestDifficulty } from "../types";
+import type { PlayerState, Quest, QuestCategory, QuestDifficulty } from "../types";
 import { xpProgress } from "./xp";
 import { itemById, WEAPON_ITEMS, type ShopItem } from "./catalog";
 
@@ -142,10 +142,15 @@ export function pickMonster(difficulty: QuestDifficulty): Monster {
   return pool[Math.floor(Math.random() * pool.length)];
 }
 
-export function resolveCombat(player: PlayerState, quest: Quest): CombatResult {
-  const monster = pickMonster(quest.difficulty);
+// Usa la categoría con más progreso si la pelea no viene de una quest concreta
+// (grind / jefe de torre).
+function bestCategory(p: PlayerState): QuestCategory {
+  return (Object.entries(p.stats) as [QuestCategory, number][]).sort((a, b) => b[1] - a[1])[0]?.[0] ?? "strength";
+}
+
+export function fightMonster(player: PlayerState, monster: Monster, category?: QuestCategory): CombatResult {
   const { level } = xpProgress(player.xp);
-  const stat = player.stats[quest.category] ?? 0;
+  const stat = player.stats[category ?? bestCategory(player)] ?? 0;
   const weapon = player.weapon ? itemById(player.weapon) : undefined;
 
   let damage = 12 + level * 3 + Math.floor(stat / 6) + (weapon?.bonus?.dmg ?? 0);
@@ -168,4 +173,36 @@ export function resolveCombat(player: PlayerState, quest: Quest): CombatResult {
   }
 
   return { monster, victory, damage, coins, drop, spell };
+}
+
+export function resolveCombat(player: PlayerState, quest: Quest): CombatResult {
+  return fightMonster(player, pickMonster(quest.difficulty), quest.category);
+}
+
+// El jefe del piso como monstruo: su HP es el mismo del piso, así el daño de la
+// pelea se suma al daño passivo de las quests sobre la misma barra.
+export function bossMonsterForFloor(info: TowerFloor): Monster {
+  return {
+    name: info.boss,
+    hp: info.hp,
+    coinsMin: Math.round(info.reward * 0.5),
+    coinsMax: Math.round(info.reward * 0.8),
+    dropChance: 0.4,
+  };
+}
+
+export function grindDifficulty(floor: number): QuestDifficulty {
+  if (floor >= 5) return "B";
+  if (floor === 4) return "C";
+  if (floor === 3) return "D";
+  if (floor === 2) return "E";
+  return "F";
+}
+
+// Oro que da completar una quest en la vida real (ahora el oro no viene del
+// auto-combate). Escala con el rango.
+const QUEST_COINS: Record<QuestDifficulty, number> = { F: 5, E: 8, D: 12, C: 18, B: 25 };
+
+export function questCoins(difficulty: QuestDifficulty): number {
+  return QUEST_COINS[difficulty];
 }

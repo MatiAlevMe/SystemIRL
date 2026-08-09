@@ -3,9 +3,11 @@ import { TOWER_FLOORS, floorInfo } from "../lib/rpg";
 
 interface Props {
   player: PlayerState;
+  onGrind: () => void;
+  onFightBoss: () => void;
 }
 
-export default function TowerPanel({ player }: Props) {
+export default function TowerPanel({ player, onGrind, onFightBoss }: Props) {
   const { floor: currentFloor, damage } = player.tower;
   const current = floorInfo(currentFloor);
   const currentHp = current ? current.hp : 0;
@@ -30,6 +32,12 @@ export default function TowerPanel({ player }: Props) {
           <div className="tower-boss-meta">
             <span>{damage}/{currentHp} daño</span>
             <span>Recompensa: 💰 {current.reward}</span>
+          </div>
+          <div className="tower-actions">
+            <button className="ghost-btn" onClick={onGrind}>⚔ Luchar</button>
+            <button className="primary-btn" onClick={onFightBoss} disabled={conquered}>
+              {conquered ? "✓ Conquistado" : "👹 Luchar contra jefe"}
+            </button>
           </div>
         </div>
       )}
@@ -58,8 +66,9 @@ export default function TowerPanel({ player }: Props) {
       </div>
 
       <p className="panel-note">
-        Cada quest completada daña al jefe del piso actual. Al derrotarlo ganas oro y la Torre
-        desbloquea el siguiente piso.
+        Cada quest completada daña al jefe del piso actual. También podés luchar directamente:
+        <strong>⚔ Luchar</strong> derrota monstruos por oro y botín, y{" "}
+        <strong>👹 Luchar contra jefe</strong> golpea al jefe para limpiar el piso.
       </p>
     </section>
   );

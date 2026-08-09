@@ -23,10 +23,11 @@ import {
 import { fetchDailyQuests } from "./lib/quests";
 import { todayKey, xpForLevel, xpProgress } from "./lib/xp";
 import { botManager } from "./lib/bots";
-import { resolveCombat, advanceTower, floorInfo, type CombatResult, type TowerResult } from "./lib/rpg";
+import { fightMonster, pickMonster, advanceTower, floorInfo, grindDifficulty, bossMonsterForFloor, questCoins, type CombatResult, type TowerResult } from "./lib/rpg";
 import { itemById, type ShopItem } from "./lib/catalog";
 import { weekRaid } from "./lib/raids";
 import { playComplete, playLevelUp, playVictory } from "./lib/sound";
+import { startMusic, toggleMusic, isMusicOn } from "./lib/music";
 import type { PartyMessage, PlayerState, Quest } from "./types";
 
 function weekRaidKey(): string {
@@ -73,6 +74,7 @@ export default function App() {
   const [combatTower, setCombatTower] = useState<TowerResult | null>(null);
   const [xpFloat, setXpFloat] = useState<{ id: number; text: string } | null>(null);
   const floatIdRef = useRef(0);
+  const [musicOn, setMusicOn] = useState(isMusicOn);
 
   const party = useChannel<PartyMessage>({
     channelId: partyCode ? `party-${partyCode}` : undefined,
@@ -176,6 +178,17 @@ export default function App() {
     return () => clearTimeout(t);
   }, [xpFloat]);
 
+  // La música arranca con la primera interacción (AudioContext lo exige).
+  useEffect(() => {
+    const kick = () => startMusic();
+    window.addEventListener("pointerdown", kick, { once: true });
+    window.addEventListener("keydown", kick, { once: true });
+    return () => {
+      window.removeEventListener("pointerdown", kick);
+      window.removeEventListener("keydown", kick);
+    };
+  }, []);
+
   const handleOnboard = useCallback(
     async (name: string) => {
       const p = emptyPlayer(name);
@@ -192,23 +205,13 @@ export default function App() {
       setCompleting(true);
       try {
         const res = await completeQuest(player, q);
-        const combat = resolveCombat(res.player, q);
         const tower = advanceTower(res.player, q);
         let next = res.player;
-        if (combat.victory && combat.coins > 0) next = { ...next, coins: next.coins + combat.coins };
-        if (combat.drop && !next.owned.includes(combat.drop.id)) {
-          next = { ...next, owned: [...next.owned, combat.drop.id] };
-        }
         next = {
           ...next,
           tower: { floor: tower.floor, damage: tower.damage },
-          coins: next.coins + tower.coins,
+          coins: next.coins + tower.coins + questCoins(q.difficulty),
         };
-        if (combat.victory) {
-          setCombat(combat);
-          setCombatTower(tower);
-          playVictory();
-        }
         setPlayer(next);
         await savePlayer(next);
         const done = new Set(doneIds);
@@ -219,7 +222,7 @@ export default function App() {
         if (res.leveledUp) playLevelUp();
         setXpFloat({
           id: ++floatIdRef.current,
-          text: `+${res.xpGained} XP · +${combat.coins + tower.coins} oro`,
+          text: `+${res.xpGained} XP · +${tower.coins + questCoins(q.difficulty)} oro`,
         });
 
         if (partyCode) {
@@ -237,6 +240,64 @@ export default function App() {
     },
     [player, completing, doneIds, partyCode],
   );
+
+  // ---- Combate manual (Torre) ----
+  const handleGrind = useCallback(() => {
+    if (!player) return;
+    const result = fightMonster(player, pickMonster(grindDifficulty(player.tower.floor)));
+    if (result.victory) {
+      let next = { ...player, coins: player.coins + result.coins };
+      if (result.drop && !next.owned.includes(result.drop.id)) {
+        next = { ...next, owned: [...next.owned, result.drop.id] };
+      }
+      setPlayer(next);
+      void savePlayer(next);
+    }
+    setCombatTower(null);
+    setCombat(result);
+    if (result.victory) playVictory();
+  }, [player]);
+
+  const handleFightBoss = useCallback(() => {
+    if (!player) return;
+    const info = floorInfo(player.tower.floor);
+    if (!info) return;
+    // La pelea ataca el HP restante del jefe (ya descontado el daño passivo de quests).
+    const remaining = Math.max(1, info.hp - player.tower.damage);
+    const result = fightMonster(player, { ...bossMonsterForFloor(info), hp: remaining });
+    let next = player;
+    let towerResult: TowerResult | null = null;
+    if (result.victory) {
+      next = { ...next, coins: next.coins + result.coins };
+      if (result.drop && !next.owned.includes(result.drop.id)) {
+        next = { ...next, owned: [...next.owned, result.drop.id] };
+      }
+      const newDamage = player.tower.damage + result.damage;
+      if (newDamage >= info.hp) {
+        const nextInfo = floorInfo(info.floor + 1);
+        next = {
+          ...next,
+          tower: nextInfo ? { floor: nextInfo.floor, damage: 0 } : { floor: info.floor, damage: info.hp },
+          coins: next.coins + info.reward,
+        };
+        towerResult = {
+          floor: info.floor,
+          damage: newDamage,
+          coins: info.reward,
+          reward: info.reward,
+          cleared: !!nextInfo,
+          conquered: !nextInfo,
+        };
+      } else {
+        next = { ...next, tower: { floor: info.floor, damage: newDamage } };
+      }
+      setPlayer(next);
+      void savePlayer(next);
+    }
+    setCombatTower(towerResult);
+    setCombat(result);
+    if (result.victory) playVictory();
+  }, [player]);
 
   const handleClaimRaid = useCallback(() => {
     if (!player || !partyCode || raidClaimed) return;
@@ -418,6 +479,13 @@ export default function App() {
         </div>
 
         <div className="head-meta">
+          <button
+            className="music-btn"
+            onClick={() => setMusicOn(toggleMusic())}
+            title={musicOn ? "Silenciar música" : "Activar música"}
+          >
+            {musicOn ? "🔊" : "🔇"}
+          </button>
           <span className="streak" title="Días seguidos">🔥 {player.streak}</span>
           <span className="coins-chip" title="Oro">💰 {player.coins}</span>
           {partyCode ? (
@@ -459,7 +527,7 @@ export default function App() {
         ) : tab === "shop" ? (
           <ShopPanel player={player} onBuy={handleBuy} onEquip={handleEquip} />
         ) : tab === "tower" ? (
-          <TowerPanel player={player} />
+          <TowerPanel player={player} onGrind={handleGrind} onFightBoss={handleFightBoss} />
         ) : (
           <PartyPanel
             partyCode={partyCode}
@@ -503,7 +571,6 @@ export default function App() {
         <DemoPanel
           playerName={player.name}
           partyCode={partyCode}
-          botCount={botManager.count}
           raid={weekRaid()}
           onGrantXp={handleGrantXp}
           onForceLevelUp={handleForceLevelUp}
