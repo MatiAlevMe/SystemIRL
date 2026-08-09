@@ -9,7 +9,7 @@ import type { PlayerClass, PlayerState, Quest, QuestCategory, QuestDifficulty } 
 import { CLASS_ICON } from "../types";
 import { xpProgress } from "./xp";
 import { itemById, WEAPON_ITEMS, type ShopItem } from "./catalog";
-import { CLASS_BALANCE, BOSS_SPEED_CAP_MULT } from "./balance";
+import { CLASS_BALANCE, BOSS_SPEED_CAP_MULT, MAX_EX_LEVEL, exXpForLevel } from "./balance";
 
 // ---- La Torre del Sistema ------------------------------------
 // Pisos con jefe: completar quests daña al jefe del piso actual; al caer,
@@ -149,10 +149,19 @@ export const RACE_RESIST: Record<Race, Element> = {
 const WEAK_MULT = 1.6;
 const RESIST_MULT = 0.6;
 const MP_REGEN = 3;
-const EX_MAX_LEVEL = 5;
 
+// Calcula el nivel EX a partir de XP acumulado (escala hasta MAX_EX_LEVEL=99).
+// Cada nivel requiere 40 + nivel*2 XP (fórmula definida en balance.ts).
 export function exLevelFor(exXp: number): number {
-  return Math.min(EX_MAX_LEVEL, 1 + Math.floor(exXp / 40));
+  let level = 1;
+  let accumulated = 0;
+  while (level < MAX_EX_LEVEL) {
+    const needed = exXpForLevel(level);
+    if (accumulated + needed > exXp) break;
+    accumulated += needed;
+    level++;
+  }
+  return level;
 }
 
 export function classEvolved(player: PlayerState): boolean {

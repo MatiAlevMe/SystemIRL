@@ -7,6 +7,7 @@ import QuestList from "./components/QuestList";
 import StatsPanel from "./components/StatsPanel";
 import CharacterPanel from "./components/CharacterPanel";
 import PartyPanel from "./components/PartyPanel";
+import ArenaPanel from "./components/ArenaPanel";
 import LevelUpModal from "./components/LevelUpModal";
 import BattleModal from "./components/BattleModal";
 import DemoPanel from "./components/DemoPanel";
@@ -47,7 +48,8 @@ import {
   type BattleState,
 } from "./lib/rpg";
 import { itemById, RAID_AURAS, type ShopItem } from "./lib/catalog";
-import { weekRaid } from "./lib/raids";
+import { weekRaid, weeklyRaidGoal } from "./lib/raids";
+import { RAID_META_DAMAGE_PCT, MAX_TOWER_ENERGY, MAX_ARENA_1V1_ENERGY, MAX_ARENA_TOURNAMENT_ENERGY } from "./lib/balance";
 import { playComplete, playDefeat, playLevelUp, playVictory } from "./lib/sound";
 import { startMusic, toggleMusic, isMusicOn, setMusicMode } from "./lib/music";
 import type { PartyMessage, PlayerClass, PlayerState, Quest } from "./types";
@@ -127,7 +129,7 @@ export default function App() {
   const [doneIds, setDoneIds] = useState<Set<string>>(new Set());
   const [completing, setCompleting] = useState(false);
   const [partyCode, setPartyCodeState] = useState<string>(() => localStorage.getItem("partyCode") ?? "");
-  const [tab, setTab] = useState<"daily" | "party" | "shop" | "tower" | "personaje">("daily");
+  const [tab, setTab] = useState<"daily" | "party" | "shop" | "tower" | "personaje" | "arena">("daily");
   const [levelUp, setLevelUp] = useState<{ level: number } | null>(null);
   const [raidClaimed, setRaidClaimed] = useState(false);
   const [demoSource, setDemoSource] = useState<string | null>(null);
@@ -554,6 +556,26 @@ export default function App() {
     void party.send({ content: { kind: "raidHit", name: player.name, raid: weekRaid(), dmg: raidState.hp } });
   }, [player, raidState.hp, party]);
 
+  // Meta semanal: daño porcentual al jefe de raid (3.5% por jugador, con cap según tier)
+  const handleWeeklyMeta = useCallback(async () => {
+    if (!player || !partyCode || raidState.hp <= 0) return;
+    const metaKey = `raid-meta:${weekRaid()}:${new Date().toISOString().slice(0, 10)}`;
+    if (localStorage.getItem(metaKey) === player.name) {
+      setToast({ id: `meta-done-${Date.now()}`, text: "✅ Ya completaste la meta hoy", kind: "done" });
+      return;
+    }
+    const rawDmg = Math.round(RAID_BOSS_HP * RAID_META_DAMAGE_PCT);
+    const dmg = Math.max(1, Math.min(rawDmg, raidState.hp));
+    localStorage.setItem(metaKey, player.name);
+    localStorage.setItem(raidContribKey(), player.name);
+    void party.send({ content: { kind: "raidHit", name: player.name, raid: weekRaid(), dmg } });
+    setToast({
+      id: `meta-hit-${Date.now()}`,
+      text: `🎯 Meta diaria completada — ${dmg} HP de daño al jefe de raid`,
+      kind: "raid",
+    });
+  }, [player, partyCode, raidState.hp, party]);
+
   const handleResetAll = useCallback(async () => {
     await clearIdb();
     localStorage.removeItem("partyCode");
@@ -561,6 +583,17 @@ export default function App() {
     window.location.hash = "";
     window.location.reload();
   }, []);
+
+  const handleRechargeEnergy = useCallback(async () => {
+    if (!player) return;
+    const next = {
+      ...player,
+      energy: { tower: MAX_TOWER_ENERGY, arena1v1: MAX_ARENA_1V1_ENERGY, arenaTourney: MAX_ARENA_TOURNAMENT_ENERGY, lastReset: todayKey() },
+    };
+    setPlayer(next);
+    await savePlayer(next);
+    setToast({ id: `recharge-${Date.now()}`, text: "⚡ Energías recargadas al máximo", kind: "levelup" });
+  }, [player]);
 
   const handleBuy = useCallback(
     (item: ShopItem) => {
@@ -737,6 +770,9 @@ export default function App() {
         <button className={tab === "tower" ? "active" : ""} onClick={() => setTab("tower")}>
           Torre
         </button>
+        <button className={tab === "arena" ? "active" : ""} onClick={() => setTab("arena")}>
+          Arena
+        </button>
       </nav>
 
       <main>
@@ -765,6 +801,33 @@ export default function App() {
           />
         ) : tab === "tower" ? (
           <TowerPanel player={player} onGrind={handleGrind} onFightBoss={handleFightBoss} />
+        ) : tab === "arena" ? (
+          <ArenaPanel
+            player={player}
+            bots={botManager.members()}
+            onStart1v1={(botName) => {
+              if (!player) return;
+              const bot = botManager.members().find((b) => b.name === botName);
+              if (!bot) return;
+              setBattleResult(null);
+              // Arena 1v1: consume 1 de energia arena1v1
+              const energy = player.energy ?? { tower: 8, arena1v1: 2, arenaTourney: 1, lastReset: "" };
+              if (energy.arena1v1 <= 0) return;
+              const next = { ...player, energy: { ...energy, arena1v1: energy.arena1v1 - 1 } };
+              setPlayer(next);
+              void savePlayer(next);
+              setBattle(startGrindBattle(next, next.tower.floor));
+            }}
+            onStartTournament={() => {
+              if (!player) return;
+              const energy = player.energy ?? { tower: 8, arena1v1: 2, arenaTourney: 1, lastReset: "" };
+              if (energy.arenaTourney <= 0) return;
+              const next = { ...player, energy: { ...energy, arenaTourney: energy.arenaTourney - 1 } };
+              setPlayer(next);
+              void savePlayer(next);
+              setBattle(startGrindBattle(next, Math.max(3, next.tower.floor)));
+            }}
+          />
         ) : (
           <PartyPanel
             partyCode={partyCode}
@@ -775,11 +838,13 @@ export default function App() {
             messages={party.messages}
             status={party.status}
             raid={weekRaid()}
+            raidGoal={weeklyRaidGoal()}
             raidHp={raidState.hp}
             raidClaimed={raidClaimed}
             localRoster={localRoster}
             onFightRaid={handleFightRaid}
             onClaimRaid={handleClaimRaid}
+            onWeeklyMeta={handleWeeklyMeta}
           />
         )}
       </main>
@@ -830,6 +895,7 @@ export default function App() {
           onFullHeal={handleFullHeal}
           onKillRaid={handleKillRaid}
           onResetAll={handleResetAll}
+          onRechargeEnergy={handleRechargeEnergy}
           autopilot={autopilot}
           onToggleAutopilot={() => setAutopilot((v) => !v)}
           revealWeakness={revealWeakness}

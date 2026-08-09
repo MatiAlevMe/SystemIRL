@@ -12,11 +12,13 @@ interface Props {
   messages: readonly Message<PartyMessage>[];
   status: ChannelStatus;
   raid: string;
+  raidGoal: string;
   raidHp: number;
   raidClaimed: boolean;
   localRoster: number;
   onFightRaid: () => void;
   onClaimRaid: () => void;
+  onWeeklyMeta: () => void;
 }
 
 interface BoardRow {
@@ -37,11 +39,13 @@ export default function PartyPanel({
   messages,
   status,
   raid,
+  raidGoal,
   raidHp,
   raidClaimed,
   localRoster,
   onFightRaid,
   onClaimRaid,
+  onWeeklyMeta,
 }: Props) {
   const [draft, setDraft] = useState("");
   const [copied, setCopied] = useState(false);
@@ -251,6 +255,19 @@ export default function PartyPanel({
                         Reclamar recompensa
                       </button>
                     ))}
+                </div>
+                <div className="raid-meta-card" style={{ marginTop: "1rem", padding: "0.75rem", background: "rgba(255,255,255,0.04)", borderRadius: "8px", borderLeft: "3px solid #f59e0b" }}>
+                  <div style={{ fontWeight: 600, marginBottom: "0.3rem", fontSize: "0.9rem" }}>🎯 Meta diaria de la semana</div>
+                  <div style={{ color: "#fbbf24", marginBottom: "0.6rem", fontSize: "0.95rem" }}>{raidGoal}</div>
+                  <button
+                    className="ghost-btn"
+                    onClick={onWeeklyMeta}
+                    disabled={raidDead}
+                    style={{ fontSize: "0.8rem" }}
+                  >
+                    ✓ Completé la meta hoy
+                  </button>
+                  <p className="panel-note" style={{ marginTop: "0.4rem" }}>Hace daño pasivo al jefe (una vez por día). Requiere estar en party.</p>
                 </div>
                 <p className="panel-note">
                   El daño al jefe se logra combatiendo en la raid y completando tu meta diaria. El ciclo semanal se reinicia cada lunes.
