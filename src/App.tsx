@@ -39,6 +39,28 @@ function weekRaid(now = new Date()): string {
   return WEEKLY_RAIDS[week];
 }
 
+const TOAST_ICON: Record<string, string> = {
+  levelup: "⚡",
+  done: "▸",
+  raid: "⌁",
+  join: "◈",
+};
+
+function toastText(content: Partial<PartyMessage>): string {
+  switch (content.kind) {
+    case "levelup":
+      return `${content.name} alcanzó el nivel ${content.level}`;
+    case "done":
+      return `${content.name} completó: ${content.quest}`;
+    case "raid":
+      return `${content.name} completó la raid de la semana 🏆`;
+    case "join":
+      return `${content.name} se unió a la party`;
+    default:
+      return "";
+  }
+}
+
 export default function App() {
   const [player, setPlayer] = useState<PlayerState | null | undefined>(undefined); // undefined = loading
   const [quests, setQuests] = useState<Quest[] | null>(null);
@@ -51,6 +73,8 @@ export default function App() {
   const [raidClaimed, setRaidClaimed] = useState(false);
   const [demoSource, setDemoSource] = useState<string | null>(null);
   const isDemo = typeof window !== "undefined" && window.location.hash.includes("demo");
+  const [toast, setToast] = useState<{ id: string; text: string; kind: string } | null>(null);
+  const lastMsgRef = useRef<string | null>(null);
 
   const party = useChannel<PartyMessage>({
     channelId: partyCode ? `party-${partyCode}` : undefined,
@@ -74,7 +98,7 @@ export default function App() {
       history: p.history,
       playerLevel: xpProgress(p.xp).level,
       streak: p.streak,
-      count: 3,
+      count: 5,
     });
     setQuests(res.quests);
     setQuestSource(res.source);
@@ -127,6 +151,26 @@ export default function App() {
       void party.send({ content: { kind: "join", name: player.name } });
     }
   }, [party.status, partyCode, player?.name]);
+
+  // Toast del feed en vivo en cualquier pestaña (el realtime se ve sin cambiar de tab).
+  useEffect(() => {
+    const msgs = party.messages;
+    if (!msgs || msgs.length === 0) return;
+    const last = msgs[msgs.length - 1];
+    if (last.id === lastMsgRef.current) return;
+    lastMsgRef.current = last.id;
+    const c = last.content as Partial<PartyMessage> | null;
+    if (!c || typeof c.kind !== "string") return;
+    const text = toastText(c);
+    if (!text) return;
+    setToast({ id: last.id, text, kind: c.kind });
+  }, [party.messages]);
+
+  useEffect(() => {
+    if (!toast) return;
+    const t = setTimeout(() => setToast(null), 4500);
+    return () => clearTimeout(t);
+  }, [toast]);
 
   const handleOnboard = useCallback(
     async (name: string) => {
@@ -305,6 +349,7 @@ export default function App() {
             <StatsPanel stats={player.stats} />
             <QuestList
               quests={quests ?? []}
+              loading={quests === null}
               completed={doneIds}
               busy={completing}
               onComplete={handleComplete}
@@ -330,6 +375,13 @@ export default function App() {
       <footer className="foot">
         SystemIRL · The Realtime Hackathon by Portal · IA + tiempo real con Portal
       </footer>
+
+      {toast && (
+        <div key={toast.id} className={`party-toast ${toast.kind}`} onClick={() => setToast(null)}>
+          <span className="toast-ico">{TOAST_ICON[toast.kind] ?? "◈"}</span>
+          <span className="toast-text">{toast.text}</span>
+        </div>
+      )}
 
       {levelUp && <LevelUpModal level={levelUp.level} onClose={() => setLevelUp(null)} />}
 

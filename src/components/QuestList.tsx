@@ -8,9 +8,12 @@ interface Props {
   busy: boolean;
   onComplete: (q: Quest) => void;
   source: string;
+  loading?: boolean;
 }
 
-export default function QuestList({ quests, completed, busy, onComplete, source }: Props) {
+const SKELETON_COUNT = 5;
+
+export default function QuestList({ quests, completed, busy, onComplete, source, loading }: Props) {
   const isAI = source === "gemini" || source === "kilo" || source === "zen";
   const sorted = useMemo(
     () => [...quests].sort((a, b) => Number(completed.has(a.id)) - Number(completed.has(b.id))),
@@ -27,6 +30,19 @@ export default function QuestList({ quests, completed, busy, onComplete, source 
           {isAI ? "⚡ generadas por IA" : source === "offline" ? "modo offline" : "El Sistema"}
         </span>
       </div>
+
+      {loading && (
+        <div className="quest-grid">
+          {Array.from({ length: SKELETON_COUNT }).map((_, i) => (
+            <article className="quest-card skeleton" key={i}>
+              <div className="skeleton-line w40" />
+              <div className="skeleton-line w80" />
+              <div className="skeleton-line w60" />
+              <div className="skeleton-line w100" />
+            </article>
+          ))}
+        </div>
+      )}
 
       {allDone && (
         <div className="all-done">
