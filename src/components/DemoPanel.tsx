@@ -13,6 +13,8 @@ interface Props {
   onAddStreak: () => void;
   onNewDay: () => void;
   onSetSource: (source: string) => void;
+  onTowerHit: () => void;
+  onTowerFloor: (floor: number) => void;
 }
 
 const BOT_DEFS = [
@@ -31,6 +33,8 @@ export default function DemoPanel({
   onAddStreak,
   onNewDay,
   onSetSource,
+  onTowerHit,
+  onTowerFloor,
 }: Props) {
   const [open, setOpen] = useState(true);
   const [win, setWin] = useState(false);
@@ -69,6 +73,11 @@ export default function DemoPanel({
             <button className="demo-btn" onClick={() => onGrantCoins(500)}>+500 oro</button>
             <button className="demo-btn" onClick={onAddStreak}>+1 streak</button>
             <button className="demo-btn" onClick={onNewDay}>Nuevo día</button>
+          </div>
+          <div className="demo-group" data-label="Torre">
+            <button className="demo-btn" onClick={onTowerHit}>Golpear jefe</button>
+            <button className="demo-btn" onClick={() => onTowerFloor(2)}>Piso 2</button>
+            <button className="demo-btn" onClick={() => onTowerFloor(5)}>Piso 5</button>
           </div>
           <div className="demo-group" data-label="Combate">
             <label className="demo-check">

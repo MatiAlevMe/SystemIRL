@@ -22,7 +22,7 @@ export interface PlayerState {
   color: string | null;
   weapon: string | null;
   owned: string[];
-  tower: { floor: number; bossHp: number };
+  tower: { floor: number; damage: number };
 }
 
 export interface PartyMessage {

@@ -1247,3 +1247,108 @@ button {
   background: rgba(79, 124, 255, 0.12);
   color: #b9c5ff;
 }
+
+/* ---------- La Torre del Sistema ---------- */
+.tower-boss {
+  margin-bottom: 20px;
+  padding: 16px;
+  border-radius: 12px;
+  background: rgba(179, 76, 255, 0.06);
+  border: 1px solid rgba(179, 76, 255, 0.25);
+}
+
+.tower-boss-name {
+  font-size: 15px;
+  font-weight: 700;
+  color: #e8ecf6;
+  margin-bottom: 10px;
+}
+
+.tower-hp-bar {
+  height: 10px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+}
+
+.tower-hp-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #b34cff, #ff4f7b);
+  transition: width 0.5s ease;
+}
+
+.tower-boss-meta {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 8px;
+  font-size: 11px;
+  color: #8b95ad;
+}
+
+.tower-ladder {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.tower-floor {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  opacity: 0.55;
+}
+
+.tower-floor.done {
+  border-color: rgba(61, 218, 215, 0.3);
+  opacity: 0.8;
+}
+
+.tower-floor.current {
+  border-color: rgba(179, 76, 255, 0.6);
+  background: rgba(179, 76, 255, 0.08);
+  opacity: 1;
+}
+
+.tower-floor-num {
+  width: 26px;
+  height: 26px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.08);
+  font-size: 12px;
+  font-weight: 800;
+  color: #8b95ad;
+}
+
+.tower-floor.current .tower-floor-num {
+  background: #b34cff;
+  color: #fff;
+}
+
+.tower-floor-body {
+  flex: 1;
+}
+
+.tower-floor-name {
+  font-size: 13px;
+  font-weight: 700;
+  color: #e8ecf6;
+}
+
+.tower-floor-boss {
+  font-size: 11px;
+  color: #8b95ad;
+}
+
+.tower-floor-tag {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  color: #b34cff;
+}

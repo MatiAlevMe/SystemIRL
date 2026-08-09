@@ -20,7 +20,7 @@ export function emptyPlayer(name: string): PlayerState {
     color: null,
     weapon: null,
     owned: [],
-    tower: { floor: 1, bossHp: 0 },
+    tower: { floor: 1, damage: 0 },
   };
 }
 

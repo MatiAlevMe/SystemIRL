@@ -1,12 +1,13 @@
 import { useEffect, useState } from "react";
-import type { CombatResult } from "../lib/rpg";
+import type { CombatResult, TowerResult } from "../lib/rpg";
 
 interface Props {
   result: CombatResult;
   onClose: () => void;
+  tower?: TowerResult | null;
 }
 
-export default function CombatModal({ result, onClose }: Props) {
+export default function CombatModal({ result, onClose, tower }: Props) {
   const { monster, victory, damage, coins, drop, spell } = result;
   const [showLoot, setShowLoot] = useState(false);
 
@@ -50,7 +51,11 @@ export default function CombatModal({ result, onClose }: Props) {
           <div className="combat-loot">
             {coins > 0 && <div className="loot-line">💰 +{coins} oro</div>}
             {drop && <div className="loot-line">🗡️ Drop: <strong>{drop.name}</strong> (+{drop.bonus?.dmg ?? 0} dmg)</div>}
-            {!drop && coins === 0 && <div className="loot-line">Sin botín esta vez.</div>}
+            {tower?.cleared && (
+              <div className="loot-line">🏰 Piso {tower.floor} conquistado +{tower.reward} oro</div>
+            )}
+            {tower?.conquered && <div className="loot-line">🏆 Torre dominada. El Sistema te reconoce.</div>}
+            {!drop && !tower?.cleared && coins === 0 && <div className="loot-line">Sin botín esta vez.</div>}
           </div>
         )}
 

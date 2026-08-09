@@ -6,6 +6,74 @@ import type { PlayerState, Quest, QuestDifficulty } from "../types";
 import { xpProgress } from "./xp";
 import { itemById, WEAPON_ITEMS, type ShopItem } from "./catalog";
 
+// ---- La Torre del Sistema ------------------------------------
+// Pisos con jefe: completar quests daña al jefe del piso actual; al caer,
+// recompensa en oro y subes un piso.
+
+export interface TowerFloor {
+  floor: number;
+  name: string;
+  boss: string;
+  hp: number;
+  reward: number;
+}
+
+export const TOWER_FLOORS: TowerFloor[] = [
+  { floor: 1, name: "La Cámara del Olvido", boss: "Guardián Roto", hp: 40, reward: 60 },
+  { floor: 2, name: "Corredor de Sombras", boss: "Espectro del Vacío", hp: 75, reward: 90 },
+  { floor: 3, name: "Sala de los Susurros", boss: "Bruja del Eco", hp: 110, reward: 130 },
+  { floor: 4, name: "Puente de Cenizas", boss: "Caballero de Ceniza", hp: 150, reward: 180 },
+  { floor: 5, name: "Cima de la Torre", boss: "Monarca del Sistema", hp: 210, reward: 260 },
+];
+
+export function floorInfo(floor: number): TowerFloor | null {
+  return TOWER_FLOORS.find((f) => f.floor === floor) ?? null;
+}
+
+export interface TowerResult {
+  floor: number;
+  damage: number;
+  coins: number;
+  reward: number;
+  cleared: boolean;
+  conquered: boolean;
+}
+
+function towerDamage(player: PlayerState, quest: Quest): number {
+  const { level } = xpProgress(player.xp);
+  const stat = player.stats[quest.category] ?? 0;
+  const weapon = player.weapon ? itemById(player.weapon) : undefined;
+  return 6 + level * 2 + Math.floor(stat / 10) + (weapon?.bonus?.dmg ?? 0) * 2;
+}
+
+export function advanceTower(player: PlayerState, quest: Quest): TowerResult {
+  const info = floorInfo(player.tower.floor);
+  if (!info) {
+    return { floor: player.tower.floor, damage: player.tower.damage, coins: 0, reward: 0, cleared: false, conquered: false };
+  }
+  let damage = player.tower.damage + towerDamage(player, quest);
+  let floor = player.tower.floor;
+  let coins = 0;
+  let reward = 0;
+  let cleared = false;
+  let conquered = false;
+
+  if (damage >= info.hp) {
+    const nextInfo = floorInfo(floor + 1);
+    if (nextInfo) {
+      floor += 1;
+      damage = 0;
+      coins = info.reward;
+      reward = info.reward;
+      cleared = true;
+    } else {
+      damage = info.hp;
+      conquered = true;
+    }
+  }
+  return { floor, damage, coins, reward, cleared, conquered };
+}
+
 export interface Monster {
   name: string;
   hp: number;

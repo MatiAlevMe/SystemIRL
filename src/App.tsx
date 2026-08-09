@@ -8,6 +8,7 @@ import LevelUpModal from "./components/LevelUpModal";
 import CombatModal from "./components/CombatModal";
 import DemoPanel from "./components/DemoPanel";
 import ShopPanel from "./components/ShopPanel";
+import TowerPanel from "./components/TowerPanel";
 import { portalClient } from "./portal";
 import {
   clearDoneToday,
@@ -22,7 +23,7 @@ import {
 import { fetchDailyQuests } from "./lib/quests";
 import { todayKey, xpForLevel, xpProgress } from "./lib/xp";
 import { botManager } from "./lib/bots";
-import { resolveCombat, type CombatResult } from "./lib/rpg";
+import { resolveCombat, advanceTower, floorInfo, type CombatResult, type TowerResult } from "./lib/rpg";
 import { itemById, type ShopItem } from "./lib/catalog";
 import { weekRaid } from "./lib/raids";
 import type { PartyMessage, PlayerState, Quest } from "./types";
@@ -60,7 +61,7 @@ export default function App() {
   const [doneIds, setDoneIds] = useState<Set<string>>(new Set());
   const [completing, setCompleting] = useState(false);
   const [partyCode, setPartyCodeState] = useState<string>(() => localStorage.getItem("partyCode") ?? "");
-  const [tab, setTab] = useState<"daily" | "party" | "shop">("daily");
+  const [tab, setTab] = useState<"daily" | "party" | "shop" | "tower">("daily");
   const [levelUp, setLevelUp] = useState<{ level: number } | null>(null);
   const [raidClaimed, setRaidClaimed] = useState(false);
   const [demoSource, setDemoSource] = useState<string | null>(null);
@@ -68,6 +69,7 @@ export default function App() {
   const [toast, setToast] = useState<{ id: string; text: string; kind: string } | null>(null);
   const lastMsgRef = useRef<string | null>(null);
   const [combat, setCombat] = useState<CombatResult | null>(null);
+  const [combatTower, setCombatTower] = useState<TowerResult | null>(null);
 
   const party = useChannel<PartyMessage>({
     channelId: partyCode ? `party-${partyCode}` : undefined,
@@ -182,12 +184,21 @@ export default function App() {
       try {
         const res = await completeQuest(player, q);
         const combat = resolveCombat(res.player, q);
+        const tower = advanceTower(res.player, q);
         let next = res.player;
         if (combat.victory && combat.coins > 0) next = { ...next, coins: next.coins + combat.coins };
         if (combat.drop && !next.owned.includes(combat.drop.id)) {
           next = { ...next, owned: [...next.owned, combat.drop.id] };
         }
-        if (combat.victory) setCombat(combat);
+        next = {
+          ...next,
+          tower: { floor: tower.floor, damage: tower.damage },
+          coins: next.coins + tower.coins,
+        };
+        if (combat.victory) {
+          setCombat(combat);
+          setCombatTower(tower);
+        }
         setPlayer(next);
         await savePlayer(next);
         const done = new Set(doneIds);
@@ -310,6 +321,37 @@ export default function App() {
     [player],
   );
 
+  const handleTowerHit = useCallback(async () => {
+    if (!player) return;
+    const dummy: Quest = {
+      id: "god-tower",
+      title: "Golpe del Sistema",
+      description: "",
+      category: "strength",
+      difficulty: "C",
+      xp: 40,
+    };
+    const res = advanceTower(player, dummy);
+    const next = {
+      ...player,
+      tower: { floor: res.floor, damage: res.damage },
+      coins: player.coins + res.coins,
+    };
+    setPlayer(next);
+    await savePlayer(next);
+  }, [player]);
+
+  const handleTowerFloor = useCallback(
+    async (floor: number) => {
+      if (!player) return;
+      if (!floorInfo(floor)) return;
+      const next = { ...player, tower: { floor, damage: 0 } };
+      setPlayer(next);
+      await savePlayer(next);
+    },
+    [player],
+  );
+
   // Pantalla de configuración si falta la publishable key.
   if (!portalClient) {
     return (
@@ -379,6 +421,9 @@ export default function App() {
         <button className={tab === "shop" ? "active" : ""} onClick={() => setTab("shop")}>
           Shop
         </button>
+        <button className={tab === "tower" ? "active" : ""} onClick={() => setTab("tower")}>
+          Torre
+        </button>
       </nav>
 
       <main>
@@ -396,6 +441,8 @@ export default function App() {
           </>
         ) : tab === "shop" ? (
           <ShopPanel player={player} onBuy={handleBuy} onEquip={handleEquip} />
+        ) : tab === "tower" ? (
+          <TowerPanel player={player} />
         ) : (
           <PartyPanel
             partyCode={partyCode}
@@ -425,7 +472,9 @@ export default function App() {
 
       {levelUp && <LevelUpModal level={levelUp.level} onClose={() => setLevelUp(null)} />}
 
-      {combat && <CombatModal result={combat} onClose={() => setCombat(null)} />}
+      {combat && (
+        <CombatModal result={combat} tower={combatTower} onClose={() => setCombat(null)} />
+      )}
 
       {isDemo && player && (
         <DemoPanel
@@ -439,6 +488,8 @@ export default function App() {
           onAddStreak={handleAddStreak}
           onNewDay={handleNewDay}
           onSetSource={handleSetSource}
+          onTowerHit={handleTowerHit}
+          onTowerFloor={handleTowerFloor}
         />
       )}
     </div>
