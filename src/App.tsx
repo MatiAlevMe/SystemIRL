@@ -5,17 +5,21 @@ import QuestList from "./components/QuestList";
 import StatsPanel from "./components/StatsPanel";
 import PartyPanel from "./components/PartyPanel";
 import LevelUpModal from "./components/LevelUpModal";
+import DemoPanel from "./components/DemoPanel";
 import { portalClient } from "./portal";
 import {
+  clearDoneToday,
   completeQuest,
   emptyPlayer,
+  grantXp,
   loadDoneToday,
   loadPlayer,
   saveDoneToday,
   savePlayer,
 } from "./lib/storage";
 import { fetchDailyQuests } from "./lib/quests";
-import { todayKey, xpProgress } from "./lib/xp";
+import { todayKey, xpForLevel, xpProgress } from "./lib/xp";
+import { botManager } from "./lib/bots";
 import type { PartyMessage, PlayerState, Quest } from "./types";
 
 const WEEKLY_RAIDS = [
@@ -45,6 +49,8 @@ export default function App() {
   const [tab, setTab] = useState<"daily" | "party">("daily");
   const [levelUp, setLevelUp] = useState<{ level: number } | null>(null);
   const [raidClaimed, setRaidClaimed] = useState(false);
+  const [demoSource, setDemoSource] = useState<string | null>(null);
+  const isDemo = typeof window !== "undefined" && window.location.hash.includes("demo");
 
   const party = useChannel<PartyMessage>({
     channelId: partyCode ? `party-${partyCode}` : undefined,
@@ -56,7 +62,10 @@ export default function App() {
   const setPartyCode = useCallback((code: string) => {
     setPartyCodeState(code);
     if (code) localStorage.setItem("partyCode", code);
-    else localStorage.removeItem("partyCode");
+    else {
+      localStorage.removeItem("partyCode");
+      botManager.clear();
+    }
   }, []);
 
   const loadQuests = useCallback(async (p: PlayerState) => {
@@ -97,8 +106,15 @@ export default function App() {
   useEffect(() => {
     if (!player || !partyCode) return;
     const { level } = xpProgress(player.xp);
-    party.setMetadata({ name: player.name, level, xp: player.xp, streak: player.streak });
-  }, [partyCode, player?.name, player?.xp, player?.streak]);
+    party.setMetadata({
+      name: player.name,
+      level,
+      xp: player.xp,
+      streak: player.streak,
+      title: player.title ?? undefined,
+      color: player.color ?? undefined,
+    });
+  }, [partyCode, player?.name, player?.xp, player?.streak, player?.title, player?.color]);
 
   // Anuncia la llegada cuando la party queda conectada.
   useEffect(() => {
@@ -156,6 +172,68 @@ export default function App() {
     setRaidClaimed(true);
     void party.send({ content: { kind: "raid", name: player.name, raid: weekRaid() } });
   }, [player, partyCode, raidClaimed]);
+
+  // ---- God mode (demo, solo visible con #demo en la URL) ----
+  const handleGrantXp = useCallback(
+    async (amount: number) => {
+      if (!player) return;
+      const res = await grantXp(player, amount);
+      setPlayer(res.player);
+      if (res.leveledUp && partyCode) {
+        void party.send({
+          content: { kind: "levelup", name: player.name, level: res.level, xp: res.player.xp },
+        });
+      }
+    },
+    [player, partyCode, party],
+  );
+
+  const handleForceLevelUp = useCallback(async () => {
+    if (!player) return;
+    const { level } = xpProgress(player.xp);
+    const nextXp = xpForLevel(level + 1) + 5;
+    const res = await grantXp(player, Math.max(1, nextXp - player.xp));
+    setPlayer(res.player);
+    if (res.leveledUp) {
+      setLevelUp({ level: res.level });
+      if (partyCode) {
+        void party.send({
+          content: { kind: "levelup", name: player.name, level: res.level, xp: res.player.xp },
+        });
+      }
+    }
+  }, [player, partyCode, party]);
+
+  const handleGrantCoins = useCallback(
+    async (amount: number) => {
+      if (!player) return;
+      const next = { ...player, coins: player.coins + amount };
+      setPlayer(next);
+      await savePlayer(next);
+    },
+    [player],
+  );
+
+  const handleAddStreak = useCallback(
+    async () => {
+      if (!player) return;
+      const next = { ...player, streak: player.streak + 1 };
+      setPlayer(next);
+      await savePlayer(next);
+    },
+    [player],
+  );
+
+  const handleNewDay = useCallback(async () => {
+    if (!player) return;
+    await clearDoneToday(todayKey());
+    setDoneIds(new Set());
+    await loadQuests(player);
+  }, [player, loadQuests]);
+
+  const handleSetSource = useCallback((source: string) => {
+    setDemoSource(source);
+  }, []);
 
   // Pantalla de configuración si falta la publishable key.
   if (!portalClient) {
@@ -230,7 +308,7 @@ export default function App() {
               completed={doneIds}
               busy={completing}
               onComplete={handleComplete}
-              source={questSource}
+              source={demoSource ?? questSource}
             />
           </>
         ) : (
@@ -254,6 +332,20 @@ export default function App() {
       </footer>
 
       {levelUp && <LevelUpModal level={levelUp.level} onClose={() => setLevelUp(null)} />}
+
+      {isDemo && player && (
+        <DemoPanel
+          playerName={player.name}
+          partyCode={partyCode}
+          botCount={botManager.count}
+          onGrantXp={handleGrantXp}
+          onForceLevelUp={handleForceLevelUp}
+          onGrantCoins={handleGrantCoins}
+          onAddStreak={handleAddStreak}
+          onNewDay={handleNewDay}
+          onSetSource={handleSetSource}
+        />
+      )}
     </div>
   );
 }

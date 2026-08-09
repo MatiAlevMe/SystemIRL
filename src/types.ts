@@ -17,6 +17,12 @@ export interface PlayerState {
   streak: number;
   lastActiveDate: string | null;
   history: string[];
+  coins: number;
+  title: string | null;
+  color: string | null;
+  weapon: string | null;
+  owned: string[];
+  tower: { floor: number; bossHp: number };
 }
 
 export interface PartyMessage {
@@ -33,6 +39,8 @@ export interface PartyMeta {
   level: number;
   xp: number;
   streak: number;
+  title?: string;
+  color?: string;
 }
 
 export const CATEGORY_LABEL: Record<QuestCategory, string> = {

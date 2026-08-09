@@ -848,3 +848,87 @@ button {
     width: 100px;
   }
 }
+
+/* ---------- God mode / Demo panel (solo visible con #demo) ---------- */
+.demo-panel {
+  position: fixed;
+  right: 12px;
+  bottom: 12px;
+  z-index: 1000;
+  width: 240px;
+  background: rgba(10, 12, 20, 0.92);
+  border: 1px solid rgba(61, 218, 215, 0.35);
+  border-radius: 10px;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.6);
+  color: #cfd6e6;
+  font-size: 12px;
+  backdrop-filter: blur(6px);
+}
+
+.demo-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 10px;
+  border-bottom: 1px solid rgba(61, 218, 215, 0.2);
+}
+
+.demo-badge {
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  color: #ffd166;
+  font-size: 11px;
+}
+
+.demo-toggle {
+  background: none;
+  border: none;
+  color: #8b95ad;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.demo-body {
+  padding: 8px 10px 10px;
+}
+
+.demo-group {
+  margin-bottom: 8px;
+}
+
+.demo-group[data-label]::before {
+  content: attr(data-label);
+  display: block;
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  color: #5f6a82;
+  text-transform: uppercase;
+  margin: 2px 0 4px;
+}
+
+.demo-btn {
+  display: inline-block;
+  margin: 2px;
+  padding: 4px 8px;
+  border: 1px solid rgba(79, 124, 255, 0.4);
+  border-radius: 6px;
+  background: rgba(79, 124, 255, 0.12);
+  color: #b9c5ff;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.demo-btn:hover:not(:disabled) {
+  background: rgba(79, 124, 255, 0.25);
+}
+
+.demo-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.demo-note {
+  margin-top: 6px;
+  font-size: 10px;
+  color: #5f6a82;
+}
