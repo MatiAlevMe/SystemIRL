@@ -78,8 +78,11 @@ export const TRINKETS: ShopItem[] = [
 export const POTIONS: ShopItem[] = [
   { id: "p-pocion", name: "Poción Menor", kind: "potion", price: 90, desc: "Restaura 30% HP en combate.", bonus: { hpPct: 0.30 } },
   { id: "p-eter", name: "Éter", kind: "potion", price: 100, desc: "Restaura 30% MP en combate.", bonus: { mpPct: 0.30 } },
+  { id: "p-ex-menor", name: "Poción EX Menor", kind: "potion", price: 90, desc: "Carga 30% del gauge EX.", bonus: { ex: 30 } },
   { id: "p-elixir", name: "Elixir EX", kind: "potion", price: 140, desc: "Carga 50% del gauge EX.", bonus: { ex: 50 } },
   { id: "p-mayor", name: "Poción Mayor", kind: "potion", price: 240, desc: "Restaura 60% HP en combate.", bonus: { hpPct: 0.60 } },
+  { id: "p-ex-mayor", name: "Poción EX Mayor", kind: "potion", price: 160, desc: "Carga 60% del gauge EX.", bonus: { ex: 60 } },
+  { id: "p-ex-superior", name: "Poción EX Superior", kind: "potion", price: 240, desc: "Carga 85% del gauge EX.", bonus: { ex: 85 } },
 ];
 
 // Auras pasivas: recompensas exclusivas del raid (no se compran).

@@ -1,6 +1,7 @@
 import { CATEGORY_ICON, CATEGORY_LABEL, CLASS_ICON, CLASS_LABEL, type PlayerState } from "../types";
 import { itemById } from "../lib/catalog";
 import { xpProgress } from "../lib/xp";
+import { RAID_SKILL_KILLS, RAID_SKILLS } from "../lib/balance";
 import {
   combatStats,
   exProgress,
@@ -27,6 +28,10 @@ export default function CharacterPanel({ player }: Props) {
   const evolved = classEvolved(player);
   const ex = EX_SKILLS[player.cls];
   const exInfo = exProgress(player.battle.exXp);
+  const raidSkill = RAID_SKILLS[player.cls];
+  const rsLevel = player.raidSkillLevel ?? 1;
+  const rsKills = player.raidKills ?? 0;
+  const rsNext = rsLevel < 5 ? RAID_SKILL_KILLS[rsLevel + 1] : null;
   const spells = spellsFor(progress.level, player.elements);
   const weapon = itemById(player.weapon);
   const armor = itemById(player.armor);
@@ -138,6 +143,22 @@ export default function CharacterPanel({ player }: Props) {
             </div>
           ))}
         </div>
+      </div>
+
+      <div className="panel char-panel">
+        <h3>Raid Skill</h3>
+        <div className="char-class-desc">
+          💠 <strong>{raidSkill.name}</strong> · Nivel RS {rsLevel}/5
+        </div>
+        <p className="panel-note">Pasiva: {raidSkill.passiveDesc}</p>
+        <p className="panel-note">
+          Activa (RS2+): <strong>{raidSkill.activeName}</strong> — {raidSkill.activeDesc}
+        </p>
+        <p className="panel-note">
+          Sube de nivel al derrotar jefes de raid ({rsKills} kill{rsKills === 1 ? "" : "s"}
+          {rsNext ? ` · próximo nivel a los ${rsNext}` : " · nivel máximo alcanzado"}). Cada nivel suma +4% a la
+          pasiva.
+        </p>
       </div>
 
       <div className="panel char-panel">

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import type { PlayerState } from "../types";
 import { CLASS_LABEL } from "../types";
 import { itemById } from "../lib/catalog";
+import { RAID_SKILLS } from "../lib/balance";
 import {
   ELEMENT_ICON,
   EX_SKILLS,
@@ -29,7 +30,7 @@ const MODE_LABEL: Record<BattleState["mode"], string> = {
   raid: "RAID",
 };
 
-const POTION_IDS = ["p-pocion", "p-eter", "p-elixir", "p-mayor"];
+const POTION_IDS = ["p-pocion", "p-eter", "p-ex-menor", "p-elixir", "p-mayor", "p-ex-mayor", "p-ex-superior"];
 
 export default function BattleModal({ battle, player, result, onAction, onClose, revealWeakness }: Props) {
   const logRef = useRef<HTMLDivElement>(null);
@@ -38,6 +39,8 @@ export default function BattleModal({ battle, player, result, onAction, onClose,
   const me = battle.party.find((m) => m.id === "player") ?? battle.party[0];
   const mySpells = spellsFor(me.level, player.elements);
   const ex = EX_SKILLS[me.cls];
+  const raidSkill = RAID_SKILLS[me.cls];
+  const rsReady = me.raidSkill >= 2;
   const potions = POTION_IDS.map((id) => ({ id, item: itemById(id), count: player.inventory[id] ?? 0 })).filter(
     (p) => p.item && p.count > 0,
   );
@@ -197,6 +200,16 @@ export default function BattleModal({ battle, player, result, onAction, onClose,
               >
                 ⭐ {ex.name}
               </button>
+              {raidSkill && (
+                <button
+                  className={`battle-act rs-ready ${rsReady ? "" : "locked"}`}
+                  disabled={!rsReady || !targetId}
+                  title={raidSkill.activeDesc}
+                  onClick={() => act({ type: "rs", target: targetId })}
+                >
+                  💠 {raidSkill.activeName}
+                </button>
+              )}
               <button className="battle-act" onClick={() => act({ type: "flee" })}>
                 🏃 Huir
               </button>

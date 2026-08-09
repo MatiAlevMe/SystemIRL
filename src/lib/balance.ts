@@ -108,6 +108,24 @@ export interface RaidSkillDef {
   activeDesc: string;
 }
 
+// Raid Skill: sube al matar jefes de raid. L1 = base, L5 = máximo.
+// Kills acumuladas requeridas por nivel (1/2/4/6 → L2/L3/L4/L5).
+export const RAID_SKILL_KILLS: Record<number, number> = { 1: 0, 2: 1, 3: 2, 4: 4, 5: 6 };
+export const MAX_RAID_SKILL = 5;
+
+export function raidSkillLevelFor(kills: number): number {
+  let lvl = 1;
+  for (let i = 1; i <= MAX_RAID_SKILL; i++) {
+    if (kills >= RAID_SKILL_KILLS[i]) lvl = i;
+  }
+  return lvl;
+}
+
+// Bonus pasivo por nivel de Raid Skill: +4% por nivel por encima de L1.
+export function raidSkillBonus(level: number): number {
+  return 0.04 * (level - 1);
+}
+
 export const RAID_SKILLS: Record<PlayerClass, RaidSkillDef> = {
   guerrero: {
     name: "Sangre del Monarca",
@@ -141,4 +159,23 @@ export function exMilestoneBonus(exLevel: number): { regenPct: number; crit: num
     crit: exLevel >= 25 ? 0.05 : 0,
     hpPct: exLevel >= 75 ? 0.05 : 0,
   };
+}
+
+// ---- Raid por tier (1–5) --------------------------------------
+export const MAX_RAID_TIER = 5;
+export const RAID_TIER_HP: Record<number, number> = { 1: 1200, 2: 1800, 3: 2600, 4: 3600, 5: 5000 };
+
+// El tier más alto disponible está atado a la Raid Skill del jugador.
+export function maxRaidTierFor(raidSkillLevel: number): number {
+  return Math.min(MAX_RAID_TIER, Math.max(1, raidSkillLevel));
+}
+
+// Límite de intentos de raid por día (1).
+export const RAID_ATTEMPTS_PER_DAY = 1;
+
+// Drop rate base de aura por tier, con stack de +5% al llegar a RS5.
+export function raidAuraDropRate(tier: number, raidSkillLevel: number): number {
+  const base = RAID_DROP_RATES_BASE[tier] ?? RAID_DROP_RATES_BASE[1];
+  const stack = raidSkillLevel >= MAX_RAID_SKILL ? 0.05 : 0;
+  return Math.min(0.95, base + stack);
 }

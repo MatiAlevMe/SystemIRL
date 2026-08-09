@@ -15,6 +15,9 @@ interface Props {
   onTowerFloor: (floor: number) => void;
   onFullHeal: () => void;
   onKillRaid: () => void;
+  onNextRaidTier: () => void;
+  onResetRaid: () => void;
+  onAddRaidKills: () => void;
   onResetAll: () => void;
   onRechargeEnergy: () => void;
   autopilot: boolean;
@@ -37,6 +40,9 @@ export default function DemoPanel({
   onTowerFloor,
   onFullHeal,
   onKillRaid,
+  onNextRaidTier,
+  onResetRaid,
+  onAddRaidKills,
   onResetAll,
   onRechargeEnergy,
   autopilot,
@@ -87,6 +93,9 @@ export default function DemoPanel({
           <div className="demo-group" data-label="Combate">
             <button className="demo-btn" onClick={onFullHeal}>Rellenar HP/MP</button>
             <button className="demo-btn" disabled={!partyCode} onClick={onKillRaid}>Matar jefe raid</button>
+            <button className="demo-btn" disabled={!partyCode} onClick={onNextRaidTier}>Siguiente raid</button>
+            <button className="demo-btn" disabled={!partyCode} onClick={onResetRaid}>Reiniciar raid</button>
+            <button className="demo-btn" onClick={onAddRaidKills}>+1 raid kill</button>
             <button className="demo-btn" onClick={onRechargeEnergy}>Recargar energías</button>
             <button className={`demo-btn ${revealWeakness ? "danger" : ""}`} onClick={onToggleRevealWeakness}>
               {revealWeakness ? "👁 Debilidades visibles" : "Revelar debilidades"}

@@ -38,7 +38,6 @@ import {
   floorInfo,
   healFromQuest,
   questCoins,
-  RAID_BOSS_HP,
   restoreFull,
   startBossBattle,
   startGrindBattle,
@@ -49,7 +48,21 @@ import {
 } from "./lib/rpg";
 import { itemById, RAID_AURAS, GEM_ELEMENT, type ShopItem } from "./lib/catalog";
 import { weekRaid, weeklyRaidGoal } from "./lib/raids";
-import { RAID_META_DAMAGE_PCT, MAX_TOWER_ENERGY, MAX_ARENA_1V1_ENERGY, MAX_ARENA_TOURNAMENT_ENERGY } from "./lib/balance";
+import {
+  RAID_META_DAMAGE_PCT,
+  RAID_META_PASSIVE_CAPS,
+  RAID_BATTLE_DAMAGE_CAPS,
+  RAID_SKILLS,
+  RAID_TIER_HP,
+  MAX_TOWER_ENERGY,
+  MAX_ARENA_1V1_ENERGY,
+  MAX_ARENA_TOURNAMENT_ENERGY,
+  MAX_RAID_TIER,
+  maxRaidTierFor,
+  raidAuraDropRate,
+  raidSkillLevelFor,
+  RAID_ATTEMPTS_PER_DAY,
+} from "./lib/balance";
 import { playComplete, playDefeat, playLevelUp, playVictory } from "./lib/sound";
 import { startMusic, toggleMusic, isMusicOn, setMusicMode } from "./lib/music";
 import type { PartyMessage, PlayerClass, PlayerState, Quest } from "./types";
@@ -91,28 +104,51 @@ function toastText(content: Partial<PartyMessage>): string {
 
 interface RaidState {
   hp: number;
+  dmg: number;
   contributors: Set<string>;
   lastHitAt: number;
 }
 
+function raidTierKey(): string {
+  return "raid-tier:" + weekRaid();
+}
+
+function raidOffsetKey(): string {
+  return "raid-offset:" + weekRaid();
+}
+
+function readRaidTier(): number {
+  const raw = Number(localStorage.getItem(raidTierKey()) ?? 1);
+  return raw >= 1 && raw <= MAX_RAID_TIER ? raw : 1;
+}
+
 // El HP del jefe de raid es el estado de la party: suma de mensajes raidHit.
 // Sin golpes en 24h, el jefe se regenera un 30% del daño hecho.
-function computeRaidState(messages: readonly Message<PartyMessage>[], raid: string): RaidState {
-  let dmg = 0;
+// El tier define el HP total y un offset local permite reiniciar el jefe (god mode).
+function computeRaidState(
+  messages: readonly Message<PartyMessage>[],
+  raid: string,
+  tier: number,
+  _resetNonce: number,
+): RaidState {
+  let rawDmg = 0;
   const contributors = new Set<string>();
   let lastHitAt = 0;
   for (const m of messages) {
     const c = m.content as Partial<PartyMessage> | null;
     if (!c || c.kind !== "raidHit" || c.raid !== raid) continue;
-    if (typeof c.dmg === "number") dmg += c.dmg;
+    if (typeof c.dmg === "number") rawDmg += c.dmg;
     if (typeof c.name === "string") contributors.add(c.name);
     lastHitAt = Math.max(lastHitAt, m.timestamp);
   }
   const idleMs = 24 * 3600 * 1000;
   if (lastHitAt > 0 && Date.now() - lastHitAt > idleMs) {
-    dmg = Math.max(0, Math.round(dmg * 0.7));
+    rawDmg = Math.max(0, Math.round(rawDmg * 0.7));
   }
-  return { hp: Math.max(0, RAID_BOSS_HP - dmg), contributors, lastHitAt };
+  const offset = Number(localStorage.getItem(raidOffsetKey()) ?? 0);
+  const dmg = Math.max(0, rawDmg - offset);
+  const hp = Math.max(0, (RAID_TIER_HP[tier] ?? RAID_TIER_HP[1]) - dmg);
+  return { hp, dmg, contributors, lastHitAt };
 }
 
 // Rango efectivo de dificultad: bonus de reliquia de ambición.
@@ -144,13 +180,27 @@ export default function App() {
   const [regensLeft, setRegensLeft] = useState(0);
   const [autopilot, setAutopilot] = useState(false);
   const [revealWeakness, setRevealWeakness] = useState(false);
+  const [raidTier, setRaidTier] = useState(readRaidTier);
+  const [raidNonce, setRaidNonce] = useState(0);
 
   const party = useChannel<PartyMessage>({
     channelId: partyCode ? `party-${partyCode}` : undefined,
     history: 40,
   });
 
-  const raidState = useMemo(() => computeRaidState(party.messages, weekRaid()), [party.messages]);
+  const raidState = useMemo(
+    () => computeRaidState(party.messages, weekRaid(), raidTier, raidNonce),
+    [party.messages, raidTier, raidNonce],
+  );
+
+  const maxRaidTier = player ? maxRaidTierFor(player.raidSkillLevel ?? 1) : 1;
+
+  const changeRaidTier = useCallback((tier: number) => {
+    const t = Math.max(1, Math.min(MAX_RAID_TIER, tier));
+    localStorage.setItem(raidTierKey(), String(t));
+    setRaidTier(t);
+    setRaidNonce((n) => n + 1);
+  }, []);
 
   const joinedRef = useRef<string | null>(null);
 
@@ -298,17 +348,40 @@ export default function App() {
     if (!contributed) return;
     localStorage.setItem(weekRaidKey(), "1");
     setRaidClaimed(true);
-    const aura = RAID_AURAS[Math.floor(Math.random() * RAID_AURAS.length)];
-    const next: PlayerState = {
-      ...player,
-      owned: player.owned.includes(aura.id) ? player.owned : [...player.owned, aura.id],
-      aura: player.aura ?? aura.id,
-    };
+    const rsLevel = player.raidSkillLevel ?? 1;
+    // Drop rate de aura según tier (+5% extra con RS5). Si falla: oro de consolación.
+    const dropRate = raidAuraDropRate(raidTier, rsLevel);
+    let next: PlayerState;
+    let toastText: string;
+    if (Math.random() < dropRate) {
+      const aura = RAID_AURAS[Math.floor(Math.random() * RAID_AURAS.length)];
+      next = {
+        ...player,
+        owned: player.owned.includes(aura.id) ? player.owned : [...player.owned, aura.id],
+        aura: player.aura ?? aura.id,
+      };
+      toastText = `🏆 ¡Jefe de raid derrotado! Recompensa: ${aura.name}`;
+    } else {
+      const coins = raidTier * 100;
+      next = { ...player, coins: player.coins + coins };
+      toastText = `🏆 ¡Jefe de raid derrotado! Sin aura esta vez… +${coins} oro`;
+    }
+    // Raid Skill: +1 kill al derrotar al jefe; recalcula el nivel (L1–L5).
+    const kills = (player.raidKills ?? 0) + 1;
+    const newRsLevel = raidSkillLevelFor(kills);
+    next = { ...next, raidKills: kills, raidSkillLevel: newRsLevel };
     setPlayer(next);
     void savePlayer(next);
-    setToast({ id: `raid-award-${Date.now()}`, text: `🏆 ¡Jefe de raid derrotado! Recompensa: ${aura.name}`, kind: "raid" });
+    setToast({ id: `raid-award-${Date.now()}`, text: toastText, kind: "raid" });
+    if (newRsLevel > rsLevel) {
+      setToast({
+        id: `rs-up-${Date.now()}`,
+        text: `💠 ¡Raid Skill subió a nivel ${newRsLevel}! ${RAID_SKILLS[player.cls]?.name ?? "Pasiva potenciada"}`,
+        kind: "levelup",
+      });
+    }
     if (partyCode) void party.send({ content: { kind: "raid", name: player.name, raid: weekRaid() } });
-  }, [raidState.hp, raidClaimed, player, partyCode, party]);
+  }, [raidState.hp, raidClaimed, player, partyCode, party, raidTier]);
 
   const handleOnboard = useCallback(
     async (name: string, cls: PlayerClass, tags: string[]) => {
@@ -422,6 +495,16 @@ export default function App() {
 
   const handleFightRaid = useCallback(() => {
     if (!player || !partyCode) return;
+    const attemptKey = `raid-attempt:${weekRaid()}:${new Date().toISOString().slice(0, 10)}`;
+    if (localStorage.getItem(attemptKey)) {
+      setToast({
+        id: `raid-limit-${Date.now()}`,
+        text: `⚡ Ya usaste tu ${RAID_ATTEMPTS_PER_DAY} intento de raid de hoy. Volvé mañana.`,
+        kind: "done",
+      });
+      return;
+    }
+    localStorage.setItem(attemptKey, "1");
     setBattleResult(null);
     setBattle(startRaidBattle(player, raidState.hp, botManager.members()));
   }, [player, partyCode, raidState.hp]);
@@ -460,16 +543,34 @@ export default function App() {
       }
 
       // Raid: cada golpe viaja como mensaje raidHit (mensajes = estado del jefe).
+      // El daño de una batalla está capeado por tier (RAID_BATTLE_DAMAGE_CAPS).
       if (state.mode === "raid" && partyCode) {
         const delta = state.damageDealt - prevDamage;
         if (delta > 0) {
-          localStorage.setItem(raidContribKey(), player.name);
-          void party.send({ content: { kind: "raidHit", name: player.name, raid: weekRaid(), dmg: delta } });
+          const capPct = RAID_BATTLE_DAMAGE_CAPS[raidTier] ?? RAID_BATTLE_DAMAGE_CAPS[1];
+          const bossHp = RAID_TIER_HP[raidTier] ?? RAID_TIER_HP[1];
+          const cap = Math.round(bossHp * capPct);
+          const allowed = Math.max(0, cap - prevDamage);
+          const dmg = Math.min(delta, allowed);
+          if (dmg > 0) {
+            localStorage.setItem(raidContribKey(), player.name);
+            void party.send({ content: { kind: "raidHit", name: player.name, raid: weekRaid(), dmg } });
+          } else {
+            setToast({
+              id: `raid-cap-${Date.now()}`,
+              text: `⛔ Alcanzaste el cap de daño de esta batalla (${Math.round(capPct * 100)}% del jefe).`,
+              kind: "done",
+            });
+          }
         } else if (!result.victory && state.damageDealt > 0) {
           const regen = Math.round(state.damageDealt * 0.3);
           if (regen > 0) {
             void party.send({ content: { kind: "raidHit", name: player.name, raid: weekRaid(), dmg: -regen } });
           }
+        }
+        // Sin daño y sin victoria (huida/derrota rápida): se devuelve el intento del día.
+        if (!result.victory && state.damageDealt === 0) {
+          localStorage.removeItem(`raid-attempt:${weekRaid()}:${new Date().toISOString().slice(0, 10)}`);
         }
       }
 
@@ -480,7 +581,7 @@ export default function App() {
       setPlayer(next);
       void savePlayer(next);
     },
-    [player, battle, partyCode, party],
+    [player, battle, partyCode, party, raidTier],
   );
 
   const handleCloseBattle = useCallback(() => {
@@ -575,17 +676,66 @@ export default function App() {
     void party.send({ content: { kind: "raidHit", name: player.name, raid: weekRaid(), dmg: raidState.hp } });
   }, [player, raidState.hp, party]);
 
-  // Meta semanal: daño porcentual al jefe de raid (3.5% por jugador, con cap según tier)
+  // God mode: avanza al siguiente tier de raid desbloqueado por la Raid Skill.
+  const handleNextRaidTier = useCallback(() => {
+    if (!player) return;
+    const maxTier = maxRaidTierFor(player.raidSkillLevel ?? 1);
+    if (raidTier >= maxTier) {
+      setToast({
+        id: `raid-tier-max-${Date.now()}`,
+        text: `💠 Tier ${raidTier} es el máximo disponible (RS ${player.raidSkillLevel ?? 1}).`,
+        kind: "done",
+      });
+      return;
+    }
+    changeRaidTier(raidTier + 1);
+    setToast({
+      id: `raid-tier-up-${Date.now()}`,
+      text: `👹 Siguiente raid: Tier ${raidTier + 1} (${RAID_TIER_HP[raidTier + 1]} HP)`,
+      kind: "raid",
+    });
+  }, [player, raidTier, changeRaidTier]);
+
+  // God mode: reinicia el HP del jefe a máximo (offset local sobre el daño de la party).
+  const handleResetRaid = useCallback(() => {
+    localStorage.setItem(raidOffsetKey(), String(raidState.dmg));
+    setRaidNonce((n) => n + 1);
+    setToast({ id: `raid-reset-${Date.now()}`, text: "👹 Jefe de raid reiniciado a HP completo", kind: "raid" });
+  }, [raidState.dmg]);
+
+  // God mode: otorga una kill de raid (sube la Raid Skill).
+  const handleAddRaidKills = useCallback(async () => {
+    if (!player) return;
+    const kills = (player.raidKills ?? 0) + 1;
+    const next = { ...player, raidKills: kills, raidSkillLevel: raidSkillLevelFor(kills) };
+    setPlayer(next);
+    await savePlayer(next);
+    setToast({
+      id: `raid-kills-${Date.now()}`,
+      text: `💠 +1 raid kill (${kills}) — Raid Skill nivel ${next.raidSkillLevel}`,
+      kind: "levelup",
+    });
+  }, [player]);
+
+  // Meta semanal: daño porcentual al jefe de raid (3.5% por jugador/día, con cap según tier)
   const handleWeeklyMeta = useCallback(async () => {
     if (!player || !partyCode || raidState.hp <= 0) return;
-    const metaKey = `raid-meta:${weekRaid()}:${new Date().toISOString().slice(0, 10)}`;
-    if (localStorage.getItem(metaKey) === player.name) {
+    const dateKey = new Date().toISOString().slice(0, 10);
+    const metaDailyKey = `raid-meta:${weekRaid()}:${dateKey}`;
+    if (localStorage.getItem(metaDailyKey) === player.name) {
       setToast({ id: `meta-done-${Date.now()}`, text: "✅ Ya completaste la meta hoy", kind: "done" });
       return;
     }
-    const rawDmg = Math.round(RAID_BOSS_HP * RAID_META_DAMAGE_PCT);
-    const dmg = Math.max(1, Math.min(rawDmg, raidState.hp));
-    localStorage.setItem(metaKey, player.name);
+    const bossHp = RAID_TIER_HP[raidTier] ?? RAID_TIER_HP[1];
+    const rawDmg = Math.round(bossHp * RAID_META_DAMAGE_PCT);
+    // Cap acumulado de daño pasivo por tier (RAID_META_PASSIVE_CAPS).
+    const metaTotalKey = `raid-meta-total:${weekRaid()}`;
+    const metaSoFar = Number(localStorage.getItem(metaTotalKey) ?? 0);
+    const capDmg = Math.round(bossHp * ((RAID_META_PASSIVE_CAPS[raidTier] ?? RAID_META_PASSIVE_CAPS[1]) as number));
+    const allowed = Math.max(0, capDmg - metaSoFar);
+    const dmg = Math.max(1, Math.min(rawDmg, allowed, raidState.hp));
+    localStorage.setItem(metaDailyKey, player.name);
+    localStorage.setItem(metaTotalKey, String(metaSoFar + dmg));
     localStorage.setItem(raidContribKey(), player.name);
     void party.send({ content: { kind: "raidHit", name: player.name, raid: weekRaid(), dmg } });
     setToast({
@@ -593,7 +743,7 @@ export default function App() {
       text: `🎯 Meta diaria completada — ${dmg} HP de daño al jefe de raid`,
       kind: "raid",
     });
-  }, [player, partyCode, raidState.hp, party]);
+  }, [player, partyCode, raidState.hp, party, raidTier]);
 
   const handleResetAll = useCallback(async () => {
     await clearIdb();
@@ -873,6 +1023,9 @@ export default function App() {
             raidHp={raidState.hp}
             raidClaimed={raidClaimed}
             localRoster={localRoster}
+            raidTier={raidTier}
+            maxRaidTier={maxRaidTier}
+            onSetRaidTier={changeRaidTier}
             onFightRaid={handleFightRaid}
             onClaimRaid={handleClaimRaid}
             onWeeklyMeta={handleWeeklyMeta}
@@ -925,6 +1078,9 @@ export default function App() {
           onTowerFloor={handleTowerFloor}
           onFullHeal={handleFullHeal}
           onKillRaid={handleKillRaid}
+          onNextRaidTier={handleNextRaidTier}
+          onResetRaid={handleResetRaid}
+          onAddRaidKills={handleAddRaidKills}
           onResetAll={handleResetAll}
           onRechargeEnergy={handleRechargeEnergy}
           autopilot={autopilot}

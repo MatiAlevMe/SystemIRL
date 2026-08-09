@@ -1,7 +1,8 @@
 import { useMemo, useState } from "react";
 import type { AggregatePresence, ChannelStatus, DetailedPresence, Message } from "@portalsdk/core";
 import type { PartyMessage } from "../types";
-import { RAID_BOSS_HP, RAID_BOSS_NAME } from "../lib/rpg";
+import { RAID_BOSS_NAME } from "../lib/rpg";
+import { RAID_TIER_HP } from "../lib/balance";
 
 interface Props {
   partyCode: string;
@@ -16,6 +17,9 @@ interface Props {
   raidHp: number;
   raidClaimed: boolean;
   localRoster: number;
+  raidTier: number;
+  maxRaidTier: number;
+  onSetRaidTier: (tier: number) => void;
   onFightRaid: () => void;
   onClaimRaid: () => void;
   onWeeklyMeta: () => void;
@@ -43,6 +47,9 @@ export default function PartyPanel({
   raidHp,
   raidClaimed,
   localRoster,
+  raidTier,
+  maxRaidTier,
+  onSetRaidTier,
   onFightRaid,
   onClaimRaid,
   onWeeklyMeta,
@@ -99,7 +106,8 @@ export default function PartyPanel({
     return raiders.size;
   }, [messages, raid]);
 
-  const raidPct = Math.min(100, Math.max(0, Math.round((1 - raidHp / RAID_BOSS_HP) * 100)));
+  const bossHp = RAID_TIER_HP[raidTier] ?? RAID_TIER_HP[1];
+  const raidPct = Math.min(100, Math.max(0, Math.round((1 - raidHp / bossHp) * 100)));
   const raidDead = raidHp <= 0;
 
   return (
@@ -228,10 +236,24 @@ export default function PartyPanel({
             <div className="panel raid">
               <h3>Raid de la semana</h3>
               <div className="raid-body">
+                <div className="raid-tier-row">
+                  {Array.from({ length: maxRaidTier }, (_, i) => i + 1).map((t) => (
+                    <button
+                      key={t}
+                      className={`tier-chip ${t === raidTier ? "active" : ""}`}
+                      onClick={() => onSetRaidTier(t)}
+                      title={`Tier ${t} — ${RAID_TIER_HP[t] ?? "?"} HP`}
+                    >
+                      T{t}
+                    </button>
+                  ))}
+                </div>
                 <div className="raid-icon">👹</div>
-                <div className="raid-title">{raid}</div>
+                <div className="raid-title">
+                  {raid} · Tier {raidTier}
+                </div>
                 <p>
-                  {RAID_BOSS_NAME} tiene <strong>{RAID_BOSS_HP} HP</strong> compartidos. El daño de toda la party
+                  {RAID_BOSS_NAME} tiene <strong>{bossHp} HP</strong> compartidos. El daño de toda la party
                   viaja en tiempo real; el HP es el estado del canal.
                 </p>
                 <div className="raid-progress">
@@ -239,7 +261,7 @@ export default function PartyPanel({
                     <div className="raid-progress-fill" style={{ width: `${raidPct}%` }} />
                   </div>
                   <span className="raid-progress-label">
-                    {raidDead ? "Derrotado" : `${Math.max(0, Math.ceil(raidHp))}/${RAID_BOSS_HP} HP`} · {raidContributors}{" "}
+                    {raidDead ? "Derrotado" : `${Math.max(0, Math.ceil(raidHp))}/${bossHp} HP`} · {raidContributors}{" "}
                     contribuyente{raidContributors === 1 ? "" : "s"}
                   </span>
                 </div>

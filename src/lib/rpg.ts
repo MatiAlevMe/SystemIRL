@@ -13,9 +13,11 @@ import {
   CLASS_BALANCE,
   BOSS_SPEED_CAP_MULT,
   MAX_EX_LEVEL,
+  RAID_SKILLS,
   exEffectMultiplier,
   exMilestoneBonus,
   exXpForLevel,
+  raidSkillBonus,
 } from "./balance";
 
 // ---- La Torre del Sistema ------------------------------------
@@ -435,6 +437,10 @@ export interface Member {
   agenda: number;
   exLevel: number;
   elements: string[];
+  raidSkill: number;
+  nextAtkMult?: number;
+  nextCrit?: boolean;
+  ignoreDefPct?: number;
 }
 
 export interface EnemyState {
@@ -473,6 +479,7 @@ export interface BattleState {
   phase: "player" | "enemy";
   oneMore: boolean;
   shield: boolean;
+  rsShield: boolean;
   result: BattleOutcome | null;
   damageDealt: number;
   usedItems: string[];
@@ -493,6 +500,7 @@ export type BattleAction =
   | { type: "defend" }
   | { type: "item"; itemId: string }
   | { type: "ex"; target: string }
+  | { type: "rs"; target: string }
   | { type: "flee" };
 
 export function buildParty(player: PlayerState, bots: Array<{ name: string; cls: PlayerClass; level: number }> = []): Member[] {
@@ -521,6 +529,7 @@ export function buildParty(player: PlayerState, bots: Array<{ name: string; cls:
       agenda: 0,
       exLevel: player.battle.exLevel,
       elements: player.elements ?? [],
+      raidSkill: player.raidSkillLevel ?? 1,
     },
   ];
   for (const b of bots) {
@@ -547,6 +556,7 @@ export function buildParty(player: PlayerState, bots: Array<{ name: string; cls:
       agenda: 0,
       exLevel: 1,
       elements: ALL_ELEMENTS,
+      raidSkill: 1,
     });
   }
   return team;
@@ -578,6 +588,7 @@ export function buildBattle(mode: BattleMode, enemies: Enemy[], party: Member[])
     phase: "player",
     oneMore: false,
     shield: false,
+    rsShield: false,
     result: null,
     damageDealt: 0,
     usedItems: [],
@@ -635,14 +646,30 @@ function effMultiplier(enemy: EnemyState, element: Element): { mult: number; wea
 }
 
 function hitEnemy(s: BattleState, attacker: Member, enemy: EnemyState, element: Element, baseDmg: number): { weak: boolean; crit: boolean } {
-  const crit = Math.random() < attacker.crit;
+  // Pasiva de Raid Skill (cazador): +4% de crítico vs jefes por nivel.
+  let critChance = attacker.crit;
+  if (attacker.cls === "cazador" && s.mode !== "grind" && attacker.raidSkill > 1) {
+    critChance += raidSkillBonus(attacker.raidSkill);
+  }
+  const crit = attacker.nextCrit || Math.random() < critChance;
   const { mult, weak } = effMultiplier(enemy, element);
-  let dmg = (baseDmg - (element === "fisico" ? enemy.def : 0)) * mult;
+  // Tiro de Sombra (cazador): ignora 50% de defensa física.
+  const defReduction = element === "fisico" ? enemy.def * (attacker.ignoreDefPct ? 1 - attacker.ignoreDefPct : 1) : 0;
+  let dmg = (baseDmg - defReduction) * mult;
+  // Filo del Monarca (guerrero): +50% (+10%/nivel) en el próximo golpe.
+  if (attacker.nextAtkMult) dmg *= attacker.nextAtkMult;
+  // Pasiva de Raid Skill (guerrero): +4% de daño vs jefes por nivel.
+  if (attacker.cls === "guerrero" && s.mode !== "grind" && attacker.raidSkill > 1) {
+    dmg *= 1 + raidSkillBonus(attacker.raidSkill);
+  }
   if (crit) dmg *= 2;
   dmg = Math.max(1, Math.round(dmg));
   enemy.hp = Math.max(0, enemy.hp - dmg);
   if (s.mode !== "grind") s.damageDealt += dmg;
-  attacker.gauge = Math.min(100, attacker.gauge + 20);
+  attacker.gauge = Math.min(100, attacker.gauge + 12);
+  attacker.nextAtkMult = undefined;
+  attacker.nextCrit = false;
+  attacker.ignoreDefPct = undefined;
   const tag = crit ? " ¡CRÍTICO!" : weak ? " ¡DÉBIL!" : "";
   pushLog(s, crit ? "crit" : weak ? "weak" : "player", `${attacker.name} golpeó a ${enemy.name}: -${dmg}${tag}`);
   if (enemy.hp <= 0) pushLog(s, "enemy", `💀 ${enemy.name} cayó.`);
@@ -691,9 +718,11 @@ function useEx(s: BattleState, p: Member, ex: ExSkill, targetId?: string): void 
     s.shield = true;
     pushLog(s, "ex", `🛡️ ¡${ex.name}! ${p.name} levanta el Muro del Sistema.`);
   } else if (ex.kind === "heal") {
+    // Pasiva de Raid Skill (sabio): +4% de eficacia de curación por nivel.
+    const healMult = 1 + (p.cls === "sabio" && p.raidSkill > 1 ? raidSkillBonus(p.raidSkill) : 0);
     for (const m of s.party) {
       if (m.hp <= 0) continue;
-      m.hp = Math.min(m.maxHp, m.hp + Math.round(m.maxHp * (ex.healPct ?? 0.5) * mult));
+      m.hp = Math.min(m.maxHp, m.hp + Math.round(m.maxHp * (ex.healPct ?? 0.5) * mult * healMult));
     }
     pushLog(s, "heal", `✨ ¡${ex.name}! La party fue sanada.`);
   } else if (ex.kind === "multi") {
@@ -702,6 +731,43 @@ function useEx(s: BattleState, p: Member, ex: ExSkill, targetId?: string): void 
     }
     pushLog(s, "ex", `🏹 ¡${ex.name}! ${targets.length} enemigo(s) alcanzado(s).`);
   }
+}
+
+// Activa de Raid Skill (disponible desde RS nivel 2). La pasiva se aplica en
+// hitEnemy (guerrero/cazador), enemyPhase (guardia) y curas (sabio).
+function useRaidSkill(s: BattleState, p: Member): void {
+  const def = RAID_SKILLS[p.cls];
+  if (!def) return;
+  const bonus = raidSkillBonus(p.raidSkill);
+  switch (p.cls) {
+    case "guerrero": {
+      p.nextAtkMult = 1.5 + bonus;
+      pushLog(s, "ex", `🗡 ¡${def.activeName}! ${p.name} carga su próximo golpe (+${Math.round((1.5 + bonus) * 100)}%).`);
+      break;
+    }
+    case "guardia": {
+      s.rsShield = true;
+      pushLog(s, "ex", `🛡 ¡${def.activeName}! La party recibe -50% de daño este turno.`);
+      break;
+    }
+    case "sabio": {
+      const healMult = 1 + bonus;
+      for (const m of s.party) {
+        if (m.hp <= 0) continue;
+        m.hp = Math.min(m.maxHp, m.hp + Math.round(m.maxHp * 0.3 * healMult));
+      }
+      s.rsShield = true;
+      pushLog(s, "heal", `✨ ¡${def.activeName}! Sanación masiva a toda la party.`);
+      break;
+    }
+    case "cazador": {
+      p.nextCrit = true;
+      p.ignoreDefPct = 0.5;
+      pushLog(s, "ex", `🏹 ¡${def.activeName}! Próximo disparo: crítico garantizado que ignora 50% de defensa.`);
+      break;
+    }
+  }
+  p.gauge = Math.min(100, p.gauge + 8);
 }
 
 function playerTurn(s: BattleState, action: BattleAction): { weakness: boolean } {
@@ -723,10 +789,12 @@ function playerTurn(s: BattleState, action: BattleAction): { weakness: boolean }
         break;
       }
       p.mp -= spell.cost;
-      p.gauge = Math.min(100, p.gauge + 15);
+      p.gauge = Math.min(100, p.gauge + 8);
       if (spell.heal) {
         const target = s.party.find((m) => m.id === action.target && m.hp > 0) ?? p;
-        const amount = Math.round((spell.heal ?? 0) + p.magic * (p.cls === "sabio" ? 1.3 : 1));
+        // Pasiva de Raid Skill (sabio): +4% de eficacia de curación por nivel.
+        const healMult = 1 + (p.cls === "sabio" && p.raidSkill > 1 ? raidSkillBonus(p.raidSkill) : 0);
+        const amount = Math.round(((spell.heal ?? 0) + p.magic * (p.cls === "sabio" ? 1.3 : 1)) * healMult);
         target.hp = Math.min(target.maxHp, target.hp + amount);
         pushLog(s, "heal", `${p.name} lanzó ${spell.name}: +${amount} HP a ${target.name}`);
       } else {
@@ -737,7 +805,7 @@ function playerTurn(s: BattleState, action: BattleAction): { weakness: boolean }
     }
     case "defend": {
       p.defending = true;
-      p.gauge = Math.min(100, p.gauge + 15);
+      p.gauge = Math.min(100, p.gauge + 8);
       pushLog(s, "player", `${p.name} se defiende.`);
       break;
     }
@@ -749,13 +817,17 @@ function playerTurn(s: BattleState, action: BattleAction): { weakness: boolean }
       useEx(s, p, EX_SKILLS[p.cls], action.target);
       break;
     }
+    case "rs": {
+      useRaidSkill(s, p);
+      break;
+    }
     case "flee": {
       if (Math.random() < 0.5) {
         s.result = "fled";
         pushLog(s, "system", `${p.name} huyó de la batalla.`);
       } else {
         pushLog(s, "system", "No pudiste huir.");
-        p.gauge = Math.min(100, p.gauge + 5);
+        p.gauge = Math.min(100, p.gauge + 3);
       }
       break;
     }
@@ -775,15 +847,16 @@ function autoAct(s: BattleState, bot: Member): void {
   }
   if (low && healSpell && bot.mp >= healSpell.cost) {
     bot.mp -= healSpell.cost;
-    bot.gauge = Math.min(100, bot.gauge + 15);
-    const amount = Math.round((healSpell.heal ?? 0) + bot.magic * (bot.cls === "sabio" ? 1.3 : 1));
+    bot.gauge = Math.min(100, bot.gauge + 8);
+    const healMult = 1 + (bot.cls === "sabio" && bot.raidSkill > 1 ? raidSkillBonus(bot.raidSkill) : 0);
+    const amount = Math.round(((healSpell.heal ?? 0) + bot.magic * (bot.cls === "sabio" ? 1.3 : 1)) * healMult);
     bot.hp = Math.min(bot.maxHp, bot.hp + amount);
     pushLog(s, "heal", `${bot.name} se curó con ${healSpell.name} (+${amount} HP)`);
     return;
   }
   if (low && Math.random() < 0.5) {
     bot.defending = true;
-    bot.gauge = Math.min(100, bot.gauge + 15);
+    bot.gauge = Math.min(100, bot.gauge + 8);
     pushLog(s, "player", `${bot.name} se defiende.`);
     return;
   }
@@ -792,7 +865,7 @@ function autoAct(s: BattleState, bot: Member): void {
     const sp = spellsFor(bot.level, bot.elements).find((x) => x.element === known && !x.heal && bot.mp >= x.cost);
     if (sp) {
       bot.mp -= sp.cost;
-      bot.gauge = Math.min(100, bot.gauge + 15);
+      bot.gauge = Math.min(100, bot.gauge + 8);
       hitEnemy(s, bot, enemies[0], sp.element, (sp.dmg ?? 0) + bot.magic);
       return;
     }
@@ -809,14 +882,18 @@ function enemyPhase(s: BattleState): void {
     let dmg = e.atk - target.def + rand(0, 3);
     if (target.defending) dmg *= 0.5;
     if (s.shield) dmg *= 0.3;
+    else if (s.rsShield) dmg *= 0.5;
+    // Pasiva de Raid Skill (guardia): -4% de daño recibido por nivel.
+    if (target.cls === "guardia" && target.raidSkill > 1) dmg *= 1 - raidSkillBonus(target.raidSkill);
     dmg = Math.max(1, Math.round(dmg));
     target.hp = Math.max(0, target.hp - dmg);
-    target.gauge = Math.min(100, target.gauge + 10);
+    target.gauge = Math.min(100, target.gauge + 6);
     pushLog(s, "enemy", `${e.icon} ${e.name} atacó a ${target.name}: -${dmg}`);
     if (target.hp <= 0) pushLog(s, "enemy", `💀 ${target.name} cayó.`);
   }
   for (const m of s.party) m.defending = false;
   s.shield = false;
+  s.rsShield = false;
 }
 
 function regenMp(s: BattleState): void {
