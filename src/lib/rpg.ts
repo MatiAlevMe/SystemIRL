@@ -23,16 +23,38 @@ export interface TowerFloor {
   reward: number;
 }
 
-export const TOWER_FLOORS: TowerFloor[] = [
-  { floor: 1, name: "La Cámara del Olvido", boss: "Guardián Roto", hp: 40, reward: 60 },
-  { floor: 2, name: "Corredor de Sombras", boss: "Espectro del Vacío", hp: 75, reward: 90 },
-  { floor: 3, name: "Sala de los Susurros", boss: "Bruja del Eco", hp: 110, reward: 130 },
-  { floor: 4, name: "Puente de Cenizas", boss: "Caballero de Ceniza", hp: 150, reward: 180 },
-  { floor: 5, name: "Cima de la Torre", boss: "Monarca del Sistema", hp: 210, reward: 260 },
+const TOWER_NAMES = [
+  "Cámara del Olvido",
+  "Corredor de Sombras",
+  "Sala de los Susurros",
+  "Puente de Cenizas",
+  "Abismo Arcano",
+  "Santuario de Titanio",
+  "Cima de la Torre",
 ];
 
-export function floorInfo(floor: number): TowerFloor | null {
-  return TOWER_FLOORS.find((f) => f.floor === floor) ?? null;
+const TOWER_BOSSES = [
+  "Guardián Roto",
+  "Espectro del Vacío",
+  "Bruja del Eco",
+  "Caballero de Ceniza",
+  "Gólem Arcano",
+  "Monarca del Sistema",
+];
+
+export function floorInfo(floor: number): TowerFloor {
+  const nameIdx = (floor - 1) % TOWER_NAMES.length;
+  const bossIdx = (floor - 1) % TOWER_BOSSES.length;
+  const hp = Math.round(40 * Math.pow(1 + 0.35 * (floor - 1), 1.4));
+  const reward = Math.round(60 * Math.pow(1 + 0.25 * (floor - 1), 1.2));
+
+  return {
+    floor,
+    name: `${TOWER_NAMES[nameIdx]} — Nivel ${floor}`,
+    boss: `${TOWER_BOSSES[bossIdx]} ${floor > 5 ? `(Rango ${Math.floor(floor / 5)})` : ""}`.trim(),
+    hp,
+    reward,
+  };
 }
 
 export interface TowerResult {

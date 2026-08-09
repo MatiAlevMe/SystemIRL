@@ -1,5 +1,5 @@
 import type { PlayerState } from "../types";
-import { TOWER_FLOORS, combatStats, floorInfo } from "../lib/rpg";
+import { combatStats, floorInfo } from "../lib/rpg";
 
 interface Props {
   player: PlayerState;
@@ -10,9 +10,9 @@ interface Props {
 export default function TowerPanel({ player, onGrind, onFightBoss }: Props) {
   const { floor: currentFloor, damage } = player.tower;
   const current = floorInfo(currentFloor);
-  const currentHp = current ? current.hp : 0;
-  const pct = current && currentHp > 0 ? Math.min(100, Math.round((damage / currentHp) * 100)) : 100;
-  const conquered = !!current && damage >= currentHp;
+  const currentHp = current.hp;
+  const pct = Math.min(100, Math.round((damage / currentHp) * 100));
+  const conquered = damage >= currentHp;
   const { maxHp, maxMp } = combatStats(player);
   const hpPct = Math.round((player.battle.hp / maxHp) * 100);
   const mpPct = Math.round((player.battle.mp / maxMp) * 100);
@@ -21,7 +21,7 @@ export default function TowerPanel({ player, onGrind, onFightBoss }: Props) {
     <section className="tower">
       <div className="section-head">
         <h2>La Torre del Sistema</h2>
-        <span className="quest-source gemini">Piso {currentFloor}/{TOWER_FLOORS.length}</span>
+        <span className="quest-source gemini">Piso {currentFloor}</span>
       </div>
 
       {current && (
@@ -60,26 +60,29 @@ export default function TowerPanel({ player, onGrind, onFightBoss }: Props) {
       )}
 
       <div className="tower-ladder">
-        {[...TOWER_FLOORS].reverse().map((f) => {
-          const isCurrent = f.floor === currentFloor;
-          const isDone = f.floor < currentFloor;
-          return (
-            <div
-              key={f.floor}
-              className={`tower-floor ${isCurrent ? "current" : ""} ${isDone ? "done" : ""}`}
-            >
-              <span className="tower-floor-num">{f.floor}</span>
-              <div className="tower-floor-body">
-                <div className="tower-floor-name">{f.name}</div>
-                <div className="tower-floor-boss">
-                  {isDone ? "✓ " : "👹 "}
-                  {f.boss}
+        {Array.from({ length: Math.min(5, currentFloor + 2) }, (_, i) => Math.max(1, currentFloor + 2 - i))
+          .filter((v, idx, arr) => arr.indexOf(v) === idx)
+          .map((floorNum) => {
+            const f = floorInfo(floorNum);
+            const isCurrent = f.floor === currentFloor;
+            const isDone = f.floor < currentFloor;
+            return (
+              <div
+                key={f.floor}
+                className={`tower-floor ${isCurrent ? "current" : ""} ${isDone ? "done" : ""}`}
+              >
+                <span className="tower-floor-num">{f.floor}</span>
+                <div className="tower-floor-body">
+                  <div className="tower-floor-name">{f.name}</div>
+                  <div className="tower-floor-boss">
+                    {isDone ? "✓ " : "👹 "}
+                    {f.boss}
+                  </div>
                 </div>
+                {isCurrent && <span className="tower-floor-tag">AQUÍ</span>}
               </div>
-              {isCurrent && <span className="tower-floor-tag">AQUÍ</span>}
-            </div>
-          );
-        })}
+            );
+          })}
       </div>
 
       <p className="panel-note">
