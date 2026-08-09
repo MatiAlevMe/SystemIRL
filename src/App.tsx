@@ -5,6 +5,7 @@ import QuestList from "./components/QuestList";
 import StatsPanel from "./components/StatsPanel";
 import PartyPanel from "./components/PartyPanel";
 import LevelUpModal from "./components/LevelUpModal";
+import CombatModal from "./components/CombatModal";
 import DemoPanel from "./components/DemoPanel";
 import { portalClient } from "./portal";
 import {
@@ -20,7 +21,9 @@ import {
 import { fetchDailyQuests } from "./lib/quests";
 import { todayKey, xpForLevel, xpProgress } from "./lib/xp";
 import { botManager } from "./lib/bots";
-import { weekRaid } from "./lib/raids";import type { PartyMessage, PlayerState, Quest } from "./types";
+import { resolveCombat, type CombatResult } from "./lib/rpg";
+import { weekRaid } from "./lib/raids";
+import type { PartyMessage, PlayerState, Quest } from "./types";
 
 function weekRaidKey(): string {
   return "raid:" + weekRaid();
@@ -62,6 +65,7 @@ export default function App() {
   const isDemo = typeof window !== "undefined" && window.location.hash.includes("demo");
   const [toast, setToast] = useState<{ id: string; text: string; kind: string } | null>(null);
   const lastMsgRef = useRef<string | null>(null);
+  const [combat, setCombat] = useState<CombatResult | null>(null);
 
   const party = useChannel<PartyMessage>({
     channelId: partyCode ? `party-${partyCode}` : undefined,
@@ -175,17 +179,25 @@ export default function App() {
       setCompleting(true);
       try {
         const res = await completeQuest(player, q);
-        setPlayer(res.player);
-        const next = new Set(doneIds);
-        next.add(q.id);
-        setDoneIds(next);
-        await saveDoneToday(todayKey(), [...next]);
+        const combat = resolveCombat(res.player, q);
+        let next = res.player;
+        if (combat.victory && combat.coins > 0) next = { ...next, coins: next.coins + combat.coins };
+        if (combat.drop && !next.owned.includes(combat.drop.id)) {
+          next = { ...next, owned: [...next.owned, combat.drop.id] };
+        }
+        if (combat.victory) setCombat(combat);
+        setPlayer(next);
+        await savePlayer(next);
+        const done = new Set(doneIds);
+        done.add(q.id);
+        setDoneIds(done);
+        await saveDoneToday(todayKey(), [...done]);
 
         if (partyCode) {
           void party.send({ content: { kind: "done", name: player.name, quest: q.title } });
           if (res.leveledUp) {
             void party.send({
-              content: { kind: "levelup", name: player.name, level: res.level, xp: res.player.xp },
+              content: { kind: "levelup", name: player.name, level: res.level, xp: next.xp },
             });
           }
         }
@@ -313,6 +325,7 @@ export default function App() {
 
         <div className="head-meta">
           <span className="streak" title="Días seguidos">🔥 {player.streak}</span>
+          <span className="coins-chip" title="Oro">💰 {player.coins}</span>
           {partyCode ? (
             <span className={`party-chip ${online > 0 ? "live" : ""}`}>◈ {online} en party</span>
           ) : (
@@ -371,6 +384,8 @@ export default function App() {
       )}
 
       {levelUp && <LevelUpModal level={levelUp.level} onClose={() => setLevelUp(null)} />}
+
+      {combat && <CombatModal result={combat} onClose={() => setCombat(null)} />}
 
       {isDemo && player && (
         <DemoPanel

@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { botManager } from "../lib/bots";
+import { setForceSpell, setForceWin } from "../lib/rpg";
 
 interface Props {
   playerName: string;
@@ -32,6 +33,18 @@ export default function DemoPanel({
   onSetSource,
 }: Props) {
   const [open, setOpen] = useState(true);
+  const [win, setWin] = useState(false);
+  const [spell, setSpell] = useState(false);
+
+  const toggleWin = () => {
+    setWin(!win);
+    setForceWin(!win);
+  };
+
+  const toggleSpell = () => {
+    setSpell(!spell);
+    setForceSpell(!spell);
+  };
 
   const spawnBots = () => {
     if (!partyCode) return;
@@ -56,6 +69,16 @@ export default function DemoPanel({
             <button className="demo-btn" onClick={() => onGrantCoins(500)}>+500 oro</button>
             <button className="demo-btn" onClick={onAddStreak}>+1 streak</button>
             <button className="demo-btn" onClick={onNewDay}>Nuevo día</button>
+          </div>
+          <div className="demo-group" data-label="Combate">
+            <label className="demo-check">
+              <input type="checkbox" checked={win} onChange={toggleWin} />
+              Victoria forzada
+            </label>
+            <label className="demo-check">
+              <input type="checkbox" checked={spell} onChange={toggleSpell} />
+              Hechizo garantizado
+            </label>
           </div>
           <div className="demo-group" data-label="IA">
             <button className="demo-btn" onClick={() => onSetSource("gemini")}>Fuente: IA</button>
