@@ -29,7 +29,7 @@ export function emptyPlayer(name: string): PlayerState {
     inventory: {},
     battle: { hp: 60, mp: 30, ex: 0, exLevel: 1, exXp: 0 },
     prefs: [],
-    rankEasy: false,
+    music: false,
   };
 }
 
@@ -53,7 +53,7 @@ export function normalizePlayer(p: Partial<PlayerState> | null | undefined): Pla
     inventory: p.inventory && typeof p.inventory === "object" ? p.inventory : {},
     battle: { ...base.battle, ...p.battle },
     prefs: Array.isArray(p.prefs) ? p.prefs : [],
-    rankEasy: Boolean(p.rankEasy),
+    music: Boolean(p.music),
   };
 }
 

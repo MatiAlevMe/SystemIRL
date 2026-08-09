@@ -286,6 +286,15 @@ export function pickEnemy(difficulty: QuestDifficulty): Enemy {
   return pool[Math.floor(Math.random() * pool.length)];
 }
 
+export function pickEnemies(difficulty: QuestDifficulty, count: number): Enemy[] {
+  const out: Enemy[] = [];
+  for (let i = 0; i < count; i++) {
+    const e = pickEnemy(difficulty);
+    out.push({ ...e, id: `${e.id}-${i}` });
+  }
+  return out;
+}
+
 const FLOOR_RACES: Race[] = ["bestia", "no-muerto", "demonio", "constructo", "cazador"];
 
 export function bossEnemyForFloor(info: TowerFloor, hp?: number): Enemy {
@@ -488,7 +497,8 @@ export function buildBattle(mode: BattleMode, enemies: Enemy[], party: Member[])
 }
 
 export function startGrindBattle(player: PlayerState, floor: number): BattleState {
-  return buildBattle("grind", [pickEnemy(grindDifficulty(floor))], buildParty(player));
+  const count = 2 + Math.floor(Math.random() * 2); // 2-3 enemigos
+  return buildBattle("grind", pickEnemies(grindDifficulty(floor), count), buildParty(player));
 }
 
 export function startBossBattle(player: PlayerState): BattleState {
@@ -498,8 +508,12 @@ export function startBossBattle(player: PlayerState): BattleState {
   return buildBattle("boss", [bossEnemyForFloor(info, remaining)], buildParty(player));
 }
 
-export function startRaidBattle(player: PlayerState, currentHp: number, bots: Member[] = []): BattleState {
-  return buildBattle("raid", [raidBossEnemy(currentHp)], buildParty(player).concat(bots.filter((m) => m.id !== "player")));
+export function startRaidBattle(
+  player: PlayerState,
+  currentHp: number,
+  bots: Array<{ name: string; cls: PlayerClass; level: number }> = [],
+): BattleState {
+  return buildBattle("raid", [raidBossEnemy(currentHp)], buildParty(player, bots));
 }
 
 // ---- Motor de combate ------------------------------------------

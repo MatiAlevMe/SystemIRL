@@ -11,11 +11,9 @@ interface Props {
   loading?: boolean;
   onRegenerate: () => void;
   regensLeft: number;
-  rankEasy: boolean;
-  onToggleRankEasy: () => void;
 }
 
-const SKELETON_COUNT = 5;
+const SKELETON_COUNT = 6;
 
 export default function QuestList({
   quests,
@@ -26,8 +24,6 @@ export default function QuestList({
   loading,
   onRegenerate,
   regensLeft,
-  rankEasy,
-  onToggleRankEasy,
 }: Props) {
   const isAI = source === "gemini" || source === "kilo" || source === "zen";
   const sorted = useMemo(
@@ -43,17 +39,10 @@ export default function QuestList({
         <h2>Quests de hoy</h2>
         <div className="quest-actions">
           <button
-            className={`rank-toggle ${rankEasy ? "active" : ""}`}
-            onClick={onToggleRankEasy}
-            title="Genera quests de rango más bajo (F a D)"
-          >
-            ⬇ Bajar rango
-          </button>
-          <button
             className="regen-btn"
             onClick={onRegenerate}
             disabled={regensLeft <= 0 || loading}
-            title="Pide quests nuevas a la IA (2 por día)"
+            title="Pide quests nuevas a la IA (2 por día). Reemplaza solo las no completadas"
           >
             ↻ Regenerar{regensLeft > 0 ? ` (${regensLeft})` : ""}
           </button>

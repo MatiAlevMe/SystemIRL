@@ -1,9 +1,25 @@
 import { Portal, type ChannelHandle } from "@portalsdk/core";
-import type { PartyMessage, PartyMeta } from "../types";
+import type { PartyMessage, PartyMeta, PlayerClass } from "../types";
 import { PORTAL_API_KEY } from "../portal";
 
 // God mode: cada bot es su propio cliente de Portal, así tiene presencia real
 // (entra al leaderboard y al contador) y puede publicar mensajes como un jugador.
+// Para evitar que la plataforma deduplique anónimos del mismo navegador, cada bot
+// mintéa un token con un `anonId` único (identidad distinta).
+
+const MINT_URL = "https://api.useportal.co/v1/tokens/anonymous";
+
+async function mintBotToken(anonId: string): Promise<string> {
+  const res = await fetch(MINT_URL, {
+    method: "POST",
+    headers: { "x-portal-key": PORTAL_API_KEY ?? "", "content-type": "application/json" },
+    body: JSON.stringify({ anonId }),
+  });
+  if (!res.ok) throw new Error(`mint bot token ${res.status}`);
+  const data = (await res.json()) as { token?: string };
+  if (!data.token) throw new Error("no token minted");
+  return data.token;
+}
 
 interface BotEntry {
   name: string;
@@ -11,7 +27,14 @@ interface BotEntry {
   channel: ChannelHandle<PartyMessage>;
   level: number;
   xp: number;
+  cls: PlayerClass;
 }
+
+export const BOT_DEFS: Array<{ name: string; cls: PlayerClass; level: number; xp: number }> = [
+  { name: "Jinwoo", cls: "cazador", level: 2, xp: 130 },
+  { name: "Cha", cls: "sabio", level: 1, xp: 45 },
+  { name: "Igris", cls: "guardia", level: 1, xp: 70 },
+];
 
 const BOT_QUESTS = [
   "Entrenamiento de sombras",
@@ -42,15 +65,23 @@ class BotManager {
     return [...this.bots.keys()];
   }
 
+  /** Descriptores para construir `Member[]` en batallas (torre/raid/arena). */
+  members(): Array<{ name: string; cls: PlayerClass; level: number }> {
+    return [...this.bots.values()].map((b) => ({ name: b.name, cls: b.cls, level: b.level }));
+  }
+
   private channelFor(code: string, name: string, meta: PartyMeta): ChannelHandle<PartyMessage> {
-    const client = new Portal({ apiKey: PORTAL_API_KEY ?? "" });
+    const client = new Portal({
+      apiKey: PORTAL_API_KEY ?? "",
+      token: () => mintBotToken(`systemirl-bot-${name.toLowerCase()}`),
+    });
     const channel = client.channel<PartyMessage>(`party-${code}`, {
       metadata: { ...meta },
       history: "none",
     });
     channel.acquire();
     channel.setMetadata({ ...meta });
-    this.bots.set(name, { name, client, channel, level: meta.level, xp: meta.xp });
+    this.bots.set(name, { name, client, channel, level: meta.level, xp: meta.xp, cls: meta.cls ?? "guerrero" });
     return channel;
   }
 
@@ -100,7 +131,7 @@ class BotManager {
     if (!bot) return;
     const level = bot.level + 1;
     const xp = bot.xp + 120;
-    this.setMeta(name, { name, level, xp, streak: bot.level > 1 ? 2 : 1 });
+    this.setMeta(name, { name, level, xp, streak: bot.level > 1 ? 2 : 1, cls: bot.cls });
     this.act(name, { kind: "levelup", name, level, xp });
   }
 

@@ -1,30 +1,41 @@
 // Música ambiente generativa con WebAudio (sin assets): un pad de acordes con
-// scheduler lookahead. El master gain controla el mute (persistido en localStorage).
-// Los navegadores exigen una interacción previa: `startMusic()` se llama en el
-// primer click/tecla de la app.
+// scheduler lookahead. Master gain bajo y notas graves: "menos es más". El
+// master gain controla el mute (persistido en localStorage). Los navegadores
+// exigen una interacción previa: `startMusic()` se llama en el primer click.
 
 let ctx: AudioContext | null = null;
 let master: GainNode | null = null;
 let timer: number | null = null;
 let chordIdx = 0;
 let nextTime = 0;
-let mode: "base" | "raid" = "base";
+let mode: "base" | "raid" | "premium" = "base";
 
-const CHORD_DUR = 4;
+const CHORD_DUR = 6;
+const MASTER_GAIN = 0.28;
 
-// Progresiones: base (cálida) y raid (más tensa, la pista premium).
+// Progresiones menores, graves y lentas (vibe Persona 4, no ruidoso).
+// Base: Am → Em → Dm → E. Sutil y ominosa.
 const BASE_CHORDS: number[][] = [
-  [220.0, 261.63, 329.63, 392.0], // Am
-  [174.61, 220.0, 261.63, 349.23], // F
-  [196.0, 246.94, 293.66, 392.0], // G
-  [164.81, 207.65, 246.94, 329.63], // Em
+  [110.0, 164.81, 196.0, 220.0], // Am2 (bajo profundo)
+  [82.41, 123.47, 164.81, 196.0], // Em (E grave)
+  [73.42, 110.0, 146.83, 174.61], // Dm
+  [82.41, 123.47, 164.81, 207.65], // E
 ];
 
+// Raid: un peldaño más tenso, mismo registro grave.
 const RAID_CHORDS: number[][] = [
-  [233.08, 277.18, 349.23, 466.16], // Bbm
-  [207.65, 246.94, 311.13, 415.3], // G#m
-  [220.0, 261.63, 329.63, 392.0], // Am
-  [246.94, 293.66, 369.99, 493.88], // Bm
+  [92.5, 138.59, 174.61, 233.08], // Bbm
+  [82.41, 123.47, 164.81, 220.0], // Em
+  [87.31, 130.81, 174.61, 207.65], // Fm
+  [92.5, 138.59, 184.0, 246.94], // Bm
+];
+
+// Premium (comprable en shop): aún más tenue, respira más, casi ambience.
+const PREMIUM_CHORDS: number[][] = [
+  [110.0, 130.81, 164.81, 196.0], // Am9 (abierto)
+  [87.31, 130.81, 174.61, 207.65], // Fmaj7
+  [82.41, 123.47, 146.83, 174.61], // Dm
+  [98.0, 130.81, 164.81, 196.0], // G
 ];
 
 function ensure(): void {
@@ -42,7 +53,9 @@ function ensure(): void {
   }
 }
 
-export function setMusicMode(m: "base" | "raid"): void {
+export type MusicMode = "base" | "raid" | "premium";
+
+export function setMusicMode(m: MusicMode): void {
   mode = m;
 }
 
@@ -57,7 +70,7 @@ function padTone(freq: number, start: number, dur: number, gain: number, type: O
   osc.type = type;
   osc.frequency.value = freq;
   g.gain.setValueAtTime(0.0001, start);
-  g.gain.linearRampToValueAtTime(gain, start + dur * 0.2);
+  g.gain.linearRampToValueAtTime(gain, start + dur * 0.25);
   g.gain.linearRampToValueAtTime(0.0001, start + dur);
   osc.connect(g);
   g.connect(master);
@@ -68,15 +81,17 @@ function padTone(freq: number, start: number, dur: number, gain: number, type: O
 function scheduleChord(chords: number[][], start: number, dur: number): void {
   const chord = chords[chordIdx % chords.length];
   chordIdx++;
-  padTone(chord[0] / 2, start, dur, 0.13, "sine"); // bajo
-  chord.forEach((f) => padTone(f, start, dur, 0.045, "triangle"));
+  // Solo bajo + un tono: sin stack de triángulos, nada de frecuencias altas.
+  padTone(chord[0] / 2, start, dur, 0.16, "sine"); // sub bajo
+  padTone(chord[1], start, dur, 0.05, "sine"); // fundamental
+  padTone(chord[3] / 2, start, dur, 0.03, "triangle"); // color grave
 }
 
 function tick(): void {
   if (!ctx) return;
   const horizon = ctx.currentTime + 0.5;
   while (nextTime < horizon) {
-    scheduleChord(mode === "raid" ? RAID_CHORDS : BASE_CHORDS, nextTime, CHORD_DUR);
+    scheduleChord(mode === "raid" ? RAID_CHORDS : mode === "premium" ? PREMIUM_CHORDS : BASE_CHORDS, nextTime, CHORD_DUR);
     nextTime += CHORD_DUR;
   }
 }
@@ -93,7 +108,7 @@ export function startMusic(): void {
   if (ctx.state === "suspended") void ctx.resume();
   nextTime = ctx.currentTime + 0.1;
   startScheduler();
-  master.gain.value = isMusicOn() ? 0.5 : 0;
+  master.gain.value = isMusicOn() ? MASTER_GAIN : 0;
 }
 
 export function toggleMusic(): boolean {
@@ -104,7 +119,7 @@ export function toggleMusic(): boolean {
   const on = master.gain.value === 0;
   const t = ctx.currentTime;
   master.gain.cancelScheduledValues(t);
-  master.gain.setTargetAtTime(on ? 0.5 : 0, t, 0.3);
+  master.gain.setTargetAtTime(on ? MASTER_GAIN : 0, t, 0.3);
   localStorage.setItem("musicOn", on ? "1" : "0");
   return on;
 }

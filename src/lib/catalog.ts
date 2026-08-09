@@ -4,7 +4,7 @@
 export interface ShopItem {
   id: string;
   name: string;
-  kind: "title" | "color" | "weapon" | "armor" | "trinket" | "aura" | "potion";
+  kind: "title" | "color" | "weapon" | "armor" | "trinket" | "aura" | "potion" | "music" | "boots" | "gem" | "lens";
   price: number;
   desc: string;
   color?: string;
@@ -17,7 +17,15 @@ export interface ShopItem {
     ex?: number;
     crit?: number;
     hpPct?: number;
+    mpPct?: number;
     atkPct?: number;
+    defPct?: number;
+    coinPct?: number;
+    dropPct?: number;
+    agi?: number;
+    exRegenPct?: number;
+    energy?: number;
+    raidAttempts?: number;
     rankBias?: number;
   };
 }
@@ -37,10 +45,20 @@ export const COLORS: ShopItem[] = [
 ];
 
 export const WEAPON_ITEMS: ShopItem[] = [
-  { id: "w-daga", name: "Daga de Iniciado", kind: "weapon", price: 150, desc: "+2 de daño por quest.", bonus: { dmg: 2 } },
+  { id: "w-daga", name: "Daga de Iniciado", kind: "weapon", price: 80, desc: "+2 de daño.", bonus: { dmg: 2 } },
   { id: "w-espada", name: "Espada de Sombras", kind: "weapon", price: 450, desc: "+5 de daño.", bonus: { dmg: 5 } },
   { id: "w-cuchillas", name: "Cuchillas del Cazador", kind: "weapon", price: 850, desc: "+10 de daño.", bonus: { dmg: 10 } },
   { id: "w-llave", name: "Llave del Destino", kind: "weapon", price: 1400, desc: "+15 de daño y +10% XP.", bonus: { dmg: 15, xpPct: 0.1 } },
+];
+
+export const MUSIC_ITEMS: ShopItem[] = [
+  {
+    id: "mus-abismo",
+    name: "Banda Sonora del Abismo",
+    kind: "music",
+    price: 800,
+    desc: "Pista premium del Sistema: más tenue, más profunda. Toca en todo el juego.",
+  },
 ];
 
 export const ARMOR_ITEMS: ShopItem[] = [
@@ -71,9 +89,13 @@ export const RAID_AURAS: ShopItem[] = [
   { id: "u-eco", name: "Aura del Eco", kind: "aura", price: 0, desc: "+5% de crítico.", bonus: { crit: 0.05 } },
 ];
 
-export const SHOP_ITEMS: ShopItem[] = [...TITLES, ...COLORS, ...WEAPON_ITEMS, ...ARMOR_ITEMS, ...TRINKETS, ...POTIONS];
+export const SHOP_ITEMS: ShopItem[] = [...TITLES, ...COLORS, ...WEAPON_ITEMS, ...ARMOR_ITEMS, ...TRINKETS, ...POTIONS, ...MUSIC_ITEMS];
 
 export function itemById(id: string | null | undefined): ShopItem | undefined {
   if (!id) return undefined;
   return [...SHOP_ITEMS, ...RAID_AURAS].find((i) => i.id === id);
+}
+
+export function buyableInShop(item: ShopItem): boolean {
+  return item.kind !== "aura";
 }

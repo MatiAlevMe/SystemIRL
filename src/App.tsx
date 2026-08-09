@@ -24,6 +24,7 @@ import {
   loadRegens,
   saveDoneToday,
   savePlayer,
+  saveQuestCache,
   saveRegens,
 } from "./lib/storage";
 import { fetchDailyQuests } from "./lib/quests";
@@ -48,8 +49,8 @@ import {
 import { itemById, RAID_AURAS, type ShopItem } from "./lib/catalog";
 import { weekRaid } from "./lib/raids";
 import { playComplete, playDefeat, playLevelUp, playVictory } from "./lib/sound";
-import { startMusic, toggleMusic, isMusicOn } from "./lib/music";
-import type { PartyMessage, PlayerClass, PlayerState, Quest, QuestDifficulty } from "./types";
+import { startMusic, toggleMusic, isMusicOn, setMusicMode } from "./lib/music";
+import type { PartyMessage, PlayerClass, PlayerState, Quest } from "./types";
 
 function weekRaidKey(): string {
   return "raid:" + weekRaid();
@@ -112,10 +113,9 @@ function computeRaidState(messages: readonly Message<PartyMessage>[], raid: stri
   return { hp: Math.max(0, RAID_BOSS_HP - dmg), contributors, lastHitAt };
 }
 
-// Rango efectivo de dificultad: bajar rango (-1) + bonus de reliquia de ambición.
+// Rango efectivo de dificultad: bonus de reliquia de ambición.
 function rankBiasOf(p: PlayerState): number {
-  const trinketBias = itemById(p.trinket)?.bonus?.rankBias ?? 0;
-  return (p.rankEasy ? -1 : 0) + trinketBias;
+  return itemById(p.trinket)?.bonus?.rankBias ?? 0;
 }
 
 const MAX_REGENS_PER_DAY = 2;
@@ -140,9 +140,6 @@ export default function App() {
   const floatIdRef = useRef(0);
   const [musicOn, setMusicOn] = useState(isMusicOn);
   const [regensLeft, setRegensLeft] = useState(0);
-  const [demoRank, setDemoRank] = useState<QuestDifficulty | null>(null);
-  const demoRankRef = useRef<QuestDifficulty | null>(null);
-  demoRankRef.current = demoRank;
   const [autopilot, setAutopilot] = useState(false);
   const [revealWeakness, setRevealWeakness] = useState(false);
 
@@ -170,10 +167,9 @@ export default function App() {
       history: p.history,
       playerLevel: xpProgress(p.xp).level,
       streak: p.streak,
-      count: 5,
+      count: 6,
       tags: p.prefs.length > 0 ? p.prefs : undefined,
       rankBias: rankBiasOf(p),
-      forceRank: demoRankRef.current ?? undefined,
       force,
     });
     setQuests(res.quests);
@@ -270,6 +266,11 @@ export default function App() {
     };
   }, []);
 
+  // Pista premium si el jugador la compró.
+  useEffect(() => {
+    setMusicMode(player?.music ? "premium" : "base");
+  }, [player?.music]);
+
   // El HP del jefe de raid llega de la party: sincroniza una batalla raid abierta.
   useEffect(() => {
     if (raidState.hp <= 0) {
@@ -287,9 +288,9 @@ export default function App() {
     );
   }, [raidState.hp]);
 
-  // Recompensa exclusiva (aura) cuando el jefe de raid cae: solo contribuyentes.
-  useEffect(() => {
-    if (raidState.hp > 0 || !player || raidClaimed) return;
+  // Claim explícito de la recompensa (aura) cuando el jefe de raid cae: solo contribuyentes.
+  const handleClaimRaid = useCallback(async () => {
+    if (!player || raidState.hp > 0 || raidClaimed) return;
     const contributed =
       raidState.contributors.has(player.name) || localStorage.getItem(raidContribKey()) === player.name;
     if (!contributed) return;
@@ -305,7 +306,7 @@ export default function App() {
     void savePlayer(next);
     setToast({ id: `raid-award-${Date.now()}`, text: `🏆 ¡Jefe de raid derrotado! Recompensa: ${aura.name}`, kind: "raid" });
     if (partyCode) void party.send({ content: { kind: "raid", name: player.name, raid: weekRaid() } });
-  }, [raidState.hp, raidClaimed, player, partyCode]);
+  }, [raidState.hp, raidClaimed, player, partyCode, party]);
 
   const handleOnboard = useCallback(
     async (name: string, cls: PlayerClass, tags: string[]) => {
@@ -323,25 +324,24 @@ export default function App() {
     const used = MAX_REGENS_PER_DAY - regensLeft + 1;
     await saveRegens(todayKey(), used);
     setRegensLeft(Math.max(0, MAX_REGENS_PER_DAY - used));
-    await loadQuests(player, true);
-  }, [player, regensLeft, loadQuests]);
-
-  const handleToggleRankEasy = useCallback(async () => {
-    if (!player) return;
-    const next = { ...player, rankEasy: !player.rankEasy };
-    setPlayer(next);
-    await savePlayer(next);
-    await loadQuests(next, true);
-  }, [player, loadQuests]);
-
-  const handleForceRank = useCallback(
-    async (rank: QuestDifficulty | null) => {
-      if (!player) return;
-      setDemoRank(rank);
-      await loadQuests(player, true);
-    },
-    [player, loadQuests],
-  );
+    // Solo se reemplazan las NO completadas: se piden nuevas y se fusionan con las
+    // completadas, para que la recarga no pierda el progreso del día.
+    const pending = (quests ?? []).filter((q) => !doneIds.has(q.id));
+    const count = Math.max(1, pending.length);
+    const res = await fetchDailyQuests({
+      history: player.history,
+      playerLevel: xpProgress(player.xp).level,
+      streak: player.streak,
+      count,
+      tags: player.prefs.length > 0 ? player.prefs : undefined,
+      rankBias: rankBiasOf(player),
+      force: true,
+    });
+    const merged = [...(quests ?? []).filter((q) => doneIds.has(q.id)), ...res.quests];
+    await saveQuestCache(todayKey(), merged);
+    setQuests(merged);
+    setQuestSource(res.source);
+  }, [player, regensLeft, quests, doneIds]);
 
   const handleComplete = useCallback(
     async (q: Quest) => {
@@ -402,7 +402,7 @@ export default function App() {
   const handleFightRaid = useCallback(() => {
     if (!player || !partyCode) return;
     setBattleResult(null);
-    setBattle(startRaidBattle(player, raidState.hp));
+    setBattle(startRaidBattle(player, raidState.hp, botManager.members()));
   }, [player, partyCode, raidState.hp]);
 
   const handleBattleAction = useCallback(
@@ -586,6 +586,7 @@ export default function App() {
       else if (item.kind === "weapon") next.weapon = item.id;
       else if (item.kind === "armor") next.armor = item.id;
       else if (item.kind === "trinket") next.trinket = item.id;
+      else if (item.kind === "music") next.music = true;
       setPlayer(next);
       void savePlayer(next);
     },
@@ -602,6 +603,7 @@ export default function App() {
       else if (item.kind === "armor") next.armor = item.id;
       else if (item.kind === "trinket") next.trinket = item.id;
       else if (item.kind === "aura") next.aura = item.id;
+      else if (item.kind === "music") next.music = true;
       setPlayer(next);
       void savePlayer(next);
     },
@@ -674,7 +676,10 @@ export default function App() {
     return <Onboarding onSubmit={handleOnboard} />;
   }
   const progress = xpProgress(player.xp);
-  const online = partyCode && party.presence ? party.presence.count : 0;
+  // Roster local (tú + bots) como piso del contador online: la demo nunca depende
+  // de que la plataforma cuente la presencia anónima de cada bot.
+  const localRoster = 1 + botManager.count;
+  const online = Math.max(localRoster, partyCode && party.presence ? party.presence.count : 0);
 
   return (
     <div className="app">
@@ -747,8 +752,6 @@ export default function App() {
               source={demoSource ?? questSource}
               onRegenerate={handleRegenerate}
               regensLeft={regensLeft}
-              rankEasy={player.rankEasy}
-              onToggleRankEasy={handleToggleRankEasy}
             />
           </>
         ) : tab === "personaje" ? (
@@ -774,7 +777,9 @@ export default function App() {
             raid={weekRaid()}
             raidHp={raidState.hp}
             raidClaimed={raidClaimed}
+            localRoster={localRoster}
             onFightRaid={handleFightRaid}
+            onClaimRaid={handleClaimRaid}
           />
         )}
       </main>
@@ -829,8 +834,6 @@ export default function App() {
           onToggleAutopilot={() => setAutopilot((v) => !v)}
           revealWeakness={revealWeakness}
           onToggleRevealWeakness={() => setRevealWeakness((v) => !v)}
-          demoRank={demoRank}
-          onForceRank={handleForceRank}
         />
       )}
     </div>

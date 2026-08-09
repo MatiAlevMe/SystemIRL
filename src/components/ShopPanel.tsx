@@ -3,6 +3,7 @@ import { CLASS_ICON, CLASS_LABEL, type PlayerClass, type PlayerState } from "../
 import {
   ARMOR_ITEMS,
   COLORS,
+  MUSIC_ITEMS,
   POTIONS,
   RAID_AURAS,
   SHOP_ITEMS,
@@ -43,7 +44,7 @@ function ItemCard({
   onBuy: (item: ShopItem) => void;
   onEquip: (item: ShopItem) => void;
 }) {
-  const owned = player.owned.includes(item.id);
+  const owned = player.owned.includes(item.id) || (item.kind === "music" && player.music);
   const count = player.inventory[item.id] ?? 0;
   const equipped = equippedId(player, item.kind) === item.id;
   const affordable = player.coins >= item.price;
@@ -112,6 +113,7 @@ export default function ShopPanel({ player, onBuy, onEquip, onChangeClass }: Pro
     { label: "Armaduras", items: ARMOR_ITEMS },
     { label: "Reliquias", items: TRINKETS },
     { label: "Pociones", items: POTIONS },
+    { label: "Música", items: MUSIC_ITEMS },
     { label: "Auras de raid", items: RAID_AURAS },
   ];
 

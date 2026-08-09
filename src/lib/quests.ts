@@ -24,7 +24,13 @@ export interface QuestsRequest {
 export async function fetchDailyQuests(req: QuestsRequest): Promise<QuestsResult> {
   const date = new Date().toISOString().slice(0, 10);
 
-  const cached = req.force ? null : await loadQuestCache(date);
+  // Cache-first: si hay quests guardadas de hoy y no se pide regenerar, se
+  // devuelven tal cual (recargar la página NUNCA regenera quests).
+  if (!req.force) {
+    const cached = await loadQuestCache(date);
+    if (cached && cached.length > 0) return { quests: cached, source: "cached" };
+  }
+
   let result: QuestsResult | null = null;
 
   try {
@@ -56,7 +62,6 @@ export async function fetchDailyQuests(req: QuestsRequest): Promise<QuestsResult
     // sin red o sin serverless local: usar caché o pool local
   }
 
-  if (!result && cached) return { quests: cached, source: "cached" };
   if (!result) return { quests: clientFallback(req.count ?? 3), source: "offline" };
   return result;
 }

@@ -14,7 +14,9 @@ interface Props {
   raid: string;
   raidHp: number;
   raidClaimed: boolean;
+  localRoster: number;
   onFightRaid: () => void;
+  onClaimRaid: () => void;
 }
 
 interface BoardRow {
@@ -37,7 +39,9 @@ export default function PartyPanel({
   raid,
   raidHp,
   raidClaimed,
+  localRoster,
   onFightRaid,
+  onClaimRaid,
 }: Props) {
   const [draft, setDraft] = useState("");
   const [copied, setCopied] = useState(false);
@@ -80,7 +84,7 @@ export default function PartyPanel({
     [messages],
   );
 
-  const onlineCount = presence ? presence.count : 0;
+  const onlineCount = Math.max(localRoster, presence ? presence.count : 0);
 
   const raidContributors = useMemo(() => {
     const raiders = new Set<string>();
@@ -235,9 +239,23 @@ export default function PartyPanel({
                     contribuyente{raidContributors === 1 ? "" : "s"}
                   </span>
                 </div>
-                <button className="primary-btn" disabled={raidClaimed} onClick={onFightRaid}>
-                  {raidClaimed ? "✓ Aura obtenida" : raidDead ? "Reclamar (reaparece)" : "⚔ Luchar vs jefe de raid"}
-                </button>
+                <div className="raid-actions">
+                  <button className="primary-btn" onClick={onFightRaid}>
+                    ⚔ Luchar vs jefe de raid
+                  </button>
+                  {raidDead &&
+                    (raidClaimed ? (
+                      <span className="shop-btn equipped">✓ Aura obtenida</span>
+                    ) : (
+                      <button className="ghost-btn" onClick={onClaimRaid}>
+                        Reclamar recompensa
+                      </button>
+                    ))}
+                </div>
+                <p className="panel-note">
+                  El daño al jefe viene de tus batallas de raid (se comparte en vivo). La meta semanal no golpea al
+                  jefe por ahora.
+                </p>
               </div>
             </div>
           </div>

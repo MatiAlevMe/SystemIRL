@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { PlayerState } from "../types";
 import { CLASS_LABEL } from "../types";
 import { itemById } from "../lib/catalog";
@@ -33,13 +33,15 @@ const POTION_IDS = ["p-pocion", "p-eter", "p-elixir", "p-mayor"];
 
 export default function BattleModal({ battle, player, result, onAction, onClose, revealWeakness }: Props) {
   const logRef = useRef<HTMLDivElement>(null);
-  const enemy = battle.enemies[0];
+  const enemies = battle.enemies.filter((e) => e.hp > 0);
+  const [selectedId, setSelectedId] = useState<string>(enemies[0]?.id ?? battle.enemies[0]?.id ?? "");
   const me = battle.party.find((m) => m.id === "player") ?? battle.party[0];
   const mySpells = spellsFor(me.level);
   const ex = EX_SKILLS[me.cls];
   const potions = POTION_IDS.map((id) => ({ id, item: itemById(id), count: player.inventory[id] ?? 0 })).filter(
     (p) => p.item && p.count > 0,
   );
+  const targetId = battle.enemies.some((e) => e.id === selectedId && e.hp > 0) ? selectedId : (enemies[0]?.id ?? "");
 
   useEffect(() => {
     if (logRef.current) logRef.current.scrollTop = logRef.current.scrollHeight;
@@ -61,7 +63,12 @@ export default function BattleModal({ battle, player, result, onAction, onClose,
 
   const mePct = me.maxHp > 0 ? Math.round((me.hp / me.maxHp) * 100) : 0;
   const mpPct = me.maxMp > 0 ? Math.round((me.mp / me.maxMp) * 100) : 0;
-  const enemyPct = enemy.maxHp > 0 ? Math.round((enemy.hp / enemy.maxHp) * 100) : 0;
+
+  const pickTarget = (id: string) => {
+    if (battle.result) return;
+    setSelectedId(id);
+    playHit();
+  };
 
   return (
     <div className="modal-backdrop" onClick={() => battle.result && onClose()}>
@@ -72,24 +79,41 @@ export default function BattleModal({ battle, player, result, onAction, onClose,
         </div>
 
         <div className="battle-field">
-          <div className="enemy-card">
-            <div className="enemy-ico">{enemy.icon}</div>
-            <div className="enemy-name">{enemy.name}</div>
-            <div className="enemy-race">{enemy.race}</div>
-            {(enemy.revealed.length > 0 || revealWeakness) && (
-              <div className={`enemy-weak ${revealWeakness && enemy.revealed.length === 0 ? "demo" : ""}`} title="Debilidad revelada">
-                {Array.from(new Set([...enemy.revealed, ...(revealWeakness ? [RACE_WEAKNESS[enemy.race]] : [])])).map((el) => (
-                  <span key={el}>{ELEMENT_ICON[el]}</span>
-                ))}
-                <span className="enemy-weak-label">debilidad</span>
-              </div>
-            )}
-            <div className="battle-hp-bar">
-              <div className="battle-hp-fill" style={{ width: `${enemyPct}%` }} />
-            </div>
-            <div className="battle-nums">
-              {enemy.hp}/{enemy.maxHp}
-            </div>
+          <div className="enemy-row">
+            {battle.enemies.map((e) => {
+              const pct = e.maxHp > 0 ? Math.round((e.hp / e.maxHp) * 100) : 0;
+              const isSel = e.id === targetId;
+              return (
+                <button
+                  key={e.id}
+                  className={`enemy-card ${isSel ? "selected" : ""} ${e.hp <= 0 ? "dead" : ""}`}
+                  onClick={() => pickTarget(e.id)}
+                  disabled={e.hp <= 0}
+                >
+                  <div className="enemy-ico">{e.icon}</div>
+                  <div className="enemy-name">{e.name}</div>
+                  <div className="enemy-race">{e.race}</div>
+                  {(e.revealed.length > 0 || revealWeakness) && (
+                    <div
+                      className={`enemy-weak ${revealWeakness && e.revealed.length === 0 ? "demo" : ""}`}
+                      title="Debilidad revelada"
+                    >
+                      {Array.from(new Set([...e.revealed, ...(revealWeakness ? [RACE_WEAKNESS[e.race]] : [])])).map((el) => (
+                        <span key={el}>{ELEMENT_ICON[el]}</span>
+                      ))}
+                      <span className="enemy-weak-label">debilidad</span>
+                    </div>
+                  )}
+                  <div className="battle-hp-bar">
+                    <div className="battle-hp-fill" style={{ width: `${pct}%` }} />
+                  </div>
+                  <div className="battle-nums">
+                    {e.hp}/{e.maxHp}
+                  </div>
+                  {isSel && <div className="enemy-target">◄ objetivo</div>}
+                </button>
+              );
+            })}
           </div>
 
           <div className="party-card">
@@ -155,7 +179,11 @@ export default function BattleModal({ battle, player, result, onAction, onClose,
           <>
             {battle.oneMore && <div className="one-more-banner">🎯 ¡ONE MORE!</div>}
             <div className="battle-actions">
-              <button className="battle-act primary-btn" onClick={() => act({ type: "attack", target: enemy.id })}>
+              <button
+                className="battle-act primary-btn"
+                disabled={!targetId}
+                onClick={() => act({ type: "attack", target: targetId })}
+              >
                 ⚔ Atacar
               </button>
               <button className="battle-act" onClick={() => act({ type: "defend" })}>
@@ -163,9 +191,9 @@ export default function BattleModal({ battle, player, result, onAction, onClose,
               </button>
               <button
                 className={`battle-act ${me.gauge >= 100 ? "ex-ready" : ""}`}
-                disabled={me.gauge < 100}
+                disabled={me.gauge < 100 || !targetId}
                 title={ex.desc}
-                onClick={() => act({ type: "ex", target: enemy.id })}
+                onClick={() => act({ type: "ex", target: targetId })}
               >
                 ⭐ {ex.name}
               </button>
@@ -187,7 +215,7 @@ export default function BattleModal({ battle, player, result, onAction, onClose,
                         className="battle-act small"
                         disabled={me.mp < sp.cost}
                         title={`${ELEMENT_ICON[sp.element]} ${sp.name} · ${sp.cost} MP`}
-                        onClick={() => act({ type: "spell", spellId: sp.id, target: enemy.id })}
+                        onClick={() => act({ type: "spell", spellId: sp.id, target: targetId })}
                       >
                         {ELEMENT_ICON[sp.element]} {sp.name} ({sp.cost} MP)
                       </button>

@@ -1,6 +1,5 @@
 import { useReducer, useState } from "react";
-import { botManager } from "../lib/bots";
-import type { QuestDifficulty } from "../types";
+import { botManager, BOT_DEFS } from "../lib/bots";
 
 interface Props {
   playerName: string;
@@ -21,14 +20,7 @@ interface Props {
   onToggleAutopilot: () => void;
   revealWeakness: boolean;
   onToggleRevealWeakness: () => void;
-  demoRank: QuestDifficulty | null;
-  onForceRank: (rank: QuestDifficulty | null) => void;
 }
-
-const BOT_DEFS = [
-  { name: "Jinwoo", level: 2, xp: 130 },
-  { name: "Cha", level: 1, xp: 45 },
-];
 
 export default function DemoPanel({
   playerName,
@@ -49,8 +41,6 @@ export default function DemoPanel({
   onToggleAutopilot,
   revealWeakness,
   onToggleRevealWeakness,
-  demoRank,
-  onForceRank,
 }: Props) {
   const [open, setOpen] = useState(true);
   // botManager es un singleton mutable fuera de React: esta versión fuerza el
@@ -62,7 +52,7 @@ export default function DemoPanel({
 
   const spawnBots = () => {
     if (!partyCode) return;
-    BOT_DEFS.forEach((b) => botManager.spawn(partyCode, b.name, { name: b.name, level: b.level, xp: b.xp, streak: 1 }));
+    BOT_DEFS.forEach((b) => botManager.spawn(partyCode, b.name, { name: b.name, level: b.level, xp: b.xp, streak: 1, cls: b.cls }));
     forceRender();
   };
 
@@ -102,18 +92,6 @@ export default function DemoPanel({
           <div className="demo-group" data-label="IA">
             <button className="demo-btn" onClick={() => onSetSource("gemini")}>Fuente: IA</button>
             <button className="demo-btn" onClick={() => onSetSource("fallback")}>Fuente: fallback</button>
-            <button
-              className={`demo-btn ${demoRank === "F" ? "danger" : ""}`}
-              onClick={() => onForceRank(demoRank === "F" ? null : "F")}
-            >
-              Forzar rango: F
-            </button>
-            <button
-              className={`demo-btn ${demoRank === "B" ? "danger" : ""}`}
-              onClick={() => onForceRank(demoRank === "B" ? null : "B")}
-            >
-              Forzar rango: B
-            </button>
           </div>
           <div className="demo-group" data-label={`Bots (${botCount})`}>
             <button className="demo-btn" disabled={!partyCode} onClick={spawnBots}>
