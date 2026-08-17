@@ -52,6 +52,7 @@ import {
   type Gladiator,
 } from "./lib/rpg";
 import { itemById, RAID_AURAS, type ShopItem } from "./lib/catalog";
+import { categoriesForTags } from "./lib/prefs";
 import { weekRaid, weeklyRaidGoal } from "./lib/raids";
 import {
   RAID_META_DAMAGE_PCT,
