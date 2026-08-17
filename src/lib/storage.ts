@@ -1,5 +1,5 @@
 import { get, set } from "idb-keyval";
-import type { PlayerState, Quest } from "../types";
+import type { PlayerClass, PlayerState, Quest } from "../types";
 import { todayKey, yesterdayKey, levelFromXp } from "./xp";
 import { itemById } from "./catalog";
 import { CLASS_BALANCE } from "./balance";
@@ -9,7 +9,7 @@ const QUEST_CACHE = "quests:";
 const DONE_KEY = "done:";
 const REGEN_KEY = "regens:";
 
-export function emptyPlayer(name: string): PlayerState {
+export function emptyPlayer(name: string, cls: PlayerClass = "guerrero"): PlayerState {
   return {
     name,
     xp: 0,
@@ -23,7 +23,7 @@ export function emptyPlayer(name: string): PlayerState {
     weapon: null,
     owned: [],
     tower: { floor: 1, damage: 0 },
-    cls: "guerrero",
+    cls,
     armor: null,
     trinket: null,
     aura: null,
@@ -31,12 +31,12 @@ export function emptyPlayer(name: string): PlayerState {
     battle: { hp: 60, mp: 30, ex: 0, exLevel: 1, exXp: 0 },
     prefs: [],
     music: false,
-    agility: 45,
+    agility: CLASS_BALANCE[cls].baseAgility,
     boots: null,
     energy: { tower: 8, arena1v1: 2, arenaTourney: 1, lastReset: todayKey() },
     raidSkillLevel: 1,
     raidKills: 0,
-    elements: ["fuego"],
+    elements: [CLASS_BALANCE[cls].defaultElement],
   };
 }
 
@@ -44,7 +44,7 @@ export function emptyPlayer(name: string): PlayerState {
 // no los tienen, así que se normalizan con defaults para que nunca rompan.
 export function normalizePlayer(p: Partial<PlayerState> | null | undefined): PlayerState | null {
   if (!p || typeof p.name !== "string") return null;
-  const base = emptyPlayer(p.name);
+  const base = emptyPlayer(p.name, p.cls ?? undefined);
   const today = todayKey();
   const rawEnergy = p.energy;
   const energy = !rawEnergy || rawEnergy.lastReset !== today
@@ -72,6 +72,7 @@ export function normalizePlayer(p: Partial<PlayerState> | null | undefined): Pla
     energy,
     raidSkillLevel: typeof p.raidSkillLevel === "number" ? p.raidSkillLevel : 1,
     raidKills: typeof p.raidKills === "number" ? p.raidKills : 0,
+    duelWins: typeof p.duelWins === "number" ? p.duelWins : 0,
     elements: Array.isArray(p.elements) && p.elements.length > 0 ? p.elements : [CLASS_BALANCE[p.cls ?? base.cls]?.defaultElement ?? "fuego"],
   };
 }

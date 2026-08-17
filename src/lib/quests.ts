@@ -15,6 +15,8 @@ export interface QuestsRequest {
   streak: number;
   count?: number;
   tags?: string[];
+  /** Categorías de interés (preferencia): sesgan el rank hacia arriba, no limitan cobertura. */
+  interestCategories?: QuestCategory[];
   rankBias?: number;
   forceRank?: QuestDifficulty;
   /** Ignora la caché del día y regenera (tope por día controlado por la UI). */
@@ -43,6 +45,7 @@ export async function fetchDailyQuests(req: QuestsRequest): Promise<QuestsResult
         streak: req.streak,
         count: req.count ?? 3,
         tags: req.tags,
+        interestCategories: req.interestCategories,
         rankBias: req.rankBias,
         forceRank: req.forceRank,
       }),
@@ -89,19 +92,31 @@ export const DIFFICULTY_COLOR: Record<QuestDifficulty, string> = {
   D: "#4f7cff",
   C: "#b34cff",
   B: "#ff4f7b",
+  S: "#ffc83d",
 };
 
-export const DIFFICULTY_ORDER: QuestDifficulty[] = ["F", "E", "D", "C", "B"];
+export const DIFFICULTY_ORDER: QuestDifficulty[] = ["F", "E", "D", "C", "B", "S"];
 
-export function categoryBoost(category: QuestCategory): string {
+// Ganancia de stat base según el rank de la quest (F/E +1 … S +4).
+export const STAT_GAIN: Record<QuestDifficulty, number> = {
+  F: 1,
+  E: 1,
+  D: 2,
+  C: 2,
+  B: 3,
+  S: 4,
+};
+
+export function categoryBoost(category: QuestCategory, difficulty: QuestDifficulty): string {
+  const n = STAT_GAIN[difficulty] ?? 1;
   switch (category) {
     case "strength":
-      return "+1 Fuerza";
+      return `+${n} Fuerza`;
     case "intelligence":
-      return "+1 Inteligencia";
+      return `+${n} Inteligencia`;
     case "vitality":
-      return "+1 Vitalidad";
+      return `+${n} Vitalidad`;
     case "gold":
-      return "+1 Oro";
+      return `+${n} Oro`;
   }
 }

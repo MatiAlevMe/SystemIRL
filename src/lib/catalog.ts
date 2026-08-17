@@ -8,6 +8,8 @@ export interface ShopItem {
   price: number;
   desc: string;
   color?: string;
+  element?: string;
+  hidden?: boolean;
   bonus?: {
     xpPct?: number;
     dmg?: number;
@@ -27,6 +29,7 @@ export interface ShopItem {
     energy?: number;
     raidAttempts?: number;
     rankBias?: number;
+    weakPct?: number;
   };
 }
 
@@ -35,6 +38,10 @@ export const TITLES: ShopItem[] = [
   { id: "t-cazador", name: "Cazador de Niveles", kind: "title", price: 500, desc: "+5% de oro ganado.", bonus: { coinPct: 0.05 } },
   { id: "t-herrero", name: "Herrero de Sombras", kind: "title", price: 900, desc: "+5% de defensa.", bonus: { defPct: 0.05 } },
   { id: "t-monarca", name: "Monarca de la Torre", kind: "title", price: 1500, desc: "+10% de ataque.", bonus: { atkPct: 0.10 } },
+  // Títulos de logro (no se compran; se otorgan solos).
+  { id: "t-maestria", name: "Maestría de Elementos", kind: "title", price: 0, hidden: true, desc: "Los 5 elementos dominados. +15% de daño al golpear la debilidad.", bonus: { weakPct: 0.15 } },
+  { id: "t-arena", name: "Gladiador del Sistema", kind: "title", price: 0, hidden: true, desc: "10 duelos 1v1 ganados. +5% XP ganada.", bonus: { xpPct: 0.05 } },
+  { id: "t-torneo", name: "Campeón del Torneo", kind: "title", price: 0, hidden: true, desc: "Ganó un Torneo de 16. +10% de ataque.", bonus: { atkPct: 0.10 } },
 ];
 
 export const COLORS: ShopItem[] = [
@@ -99,28 +106,19 @@ export const BOOTS_ITEMS: ShopItem[] = [
 ];
 
 export const GEM_ITEMS: ShopItem[] = [
-  { id: "g-fuego", name: "Gema de Fuego", kind: "gem", price: 600, desc: "Desbloquea el elemento Fuego." },
-  { id: "g-hielo", name: "Gema de Hielo", kind: "gem", price: 600, desc: "Desbloquea el elemento Hielo." },
-  { id: "g-electrico", name: "Gema Eléctrica", kind: "gem", price: 600, desc: "Desbloquea el elemento Eléctrico." },
-  { id: "g-sagrado", name: "Gema Sagrada", kind: "gem", price: 600, desc: "Desbloquea el elemento Sagrado." },
-  { id: "g-sombra", name: "Gema de Sombra", kind: "gem", price: 600, desc: "Desbloquea el elemento Sombra." },
+  { id: "g-fuego", name: "Gema de Fuego", kind: "gem", price: 150, element: "fuego", desc: "Item de combate: 25 de daño de Fuego fijo a un enemigo (un solo uso).", bonus: { dmg: 25 } },
+  { id: "g-hielo", name: "Gema de Hielo", kind: "gem", price: 150, element: "hielo", desc: "Item de combate: 25 de daño de Hielo fijo a un enemigo (un solo uso).", bonus: { dmg: 25 } },
+  { id: "g-electrico", name: "Gema Eléctrica", kind: "gem", price: 150, element: "electrico", desc: "Item de combate: 25 de daño Eléctrico fijo a un enemigo (un solo uso).", bonus: { dmg: 25 } },
+  { id: "g-sagrado", name: "Gema Sagrada", kind: "gem", price: 150, element: "sagrado", desc: "Item de combate: 25 de daño Sagrado fijo a un enemigo (un solo uso).", bonus: { dmg: 25 } },
+  { id: "g-sombra", name: "Gema de Sombra", kind: "gem", price: 150, element: "sombra", desc: "Item de combate: 25 de daño de Sombra fijo a un enemigo (un solo uso).", bonus: { dmg: 25 } },
 ];
-
-// Elemento que desbloquea cada gema (se agrega a player.elements al comprar).
-export const GEM_ELEMENT: Record<string, string> = {
-  "g-fuego": "fuego",
-  "g-hielo": "hielo",
-  "g-electrico": "electrico",
-  "g-sagrado": "sagrado",
-  "g-sombra": "sombra",
-};
 
 export const LENS_ITEM: ShopItem = {
   id: "item-lente",
   name: "Lente del Sistema",
   kind: "lens",
-  price: 150,
-  desc: "Permite ver debilidades y fortalezas de cualquier enemigo.",
+  price: 80,
+  desc: "Item de combate: revela la debilidad de todos los enemigos por esta batalla (un solo uso).",
 };
 
 export const SHOP_ITEMS: ShopItem[] = [

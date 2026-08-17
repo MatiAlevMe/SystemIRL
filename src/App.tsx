@@ -51,7 +51,7 @@ import {
   type BattleState,
   type Gladiator,
 } from "./lib/rpg";
-import { itemById, RAID_AURAS, GEM_ELEMENT, type ShopItem } from "./lib/catalog";
+import { itemById, RAID_AURAS, type ShopItem } from "./lib/catalog";
 import { weekRaid, weeklyRaidGoal } from "./lib/raids";
 import {
   RAID_META_DAMAGE_PCT,
@@ -230,6 +230,7 @@ export default function App() {
       streak: p.streak,
       count: 6,
       tags: p.prefs.length > 0 ? p.prefs : undefined,
+      interestCategories: categoriesForTags(p.prefs),
       rankBias: rankBiasOf(p),
       force,
     });
@@ -394,8 +395,8 @@ export default function App() {
 
   const handleOnboard = useCallback(
     async (name: string, cls: PlayerClass, tags: string[]) => {
-      const p = emptyPlayer(name);
-      const next = { ...p, cls, prefs: tags };
+      const p = emptyPlayer(name, cls);
+      const next = { ...p, prefs: tags };
       await savePlayer(next);
       setPlayer(next);
       await loadQuests(next);
@@ -418,6 +419,7 @@ export default function App() {
       streak: player.streak,
       count,
       tags: player.prefs.length > 0 ? player.prefs : undefined,
+      interestCategories: categoriesForTags(player.prefs),
       rankBias: rankBiasOf(player),
       force: true,
     });
@@ -866,7 +868,7 @@ export default function App() {
   const handleBuy = useCallback(
     (item: ShopItem) => {
       if (!player || player.coins < item.price) return;
-      if (item.kind === "potion") {
+      if (item.kind === "potion" || item.kind === "gem" || item.kind === "lens") {
         const next = {
           ...player,
           coins: player.coins - item.price,
@@ -889,10 +891,6 @@ export default function App() {
       else if (item.kind === "trinket") next.trinket = item.id;
       else if (item.kind === "boots") next.boots = item.id;
       else if (item.kind === "music") next.music = true;
-      else if (item.kind === "gem") {
-        const el = GEM_ELEMENT[item.id];
-        if (el && !(next.elements ?? []).includes(el)) next.elements = [...(next.elements ?? []), el];
-      }
       setPlayer(next);
       void savePlayer(next);
     },

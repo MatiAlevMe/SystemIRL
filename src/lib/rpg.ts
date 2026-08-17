@@ -111,7 +111,7 @@ export function advanceTower(player: PlayerState, quest: Quest): TowerResult {
 }
 
 // Oro que da completar una quest en la vida real (el oro ya no viene del auto-combate).
-const QUEST_COINS: Record<QuestDifficulty, number> = { F: 5, E: 8, D: 12, C: 18, B: 25 };
+const QUEST_COINS: Record<QuestDifficulty, number> = { F: 5, E: 8, D: 12, C: 18, B: 25, S: 30 };
 
 export function questCoins(difficulty: QuestDifficulty): number {
   return QUEST_COINS[difficulty];
@@ -140,6 +140,23 @@ export const ELEMENT_ICON: Record<Element, string> = {
 
 // Elementos con los que juegan los bots de la party (todos desbloqueados).
 export const ALL_ELEMENTS: Element[] = ["fisico", "fuego", "hielo", "electrico", "sagrado", "sombra"];
+
+// Los 5 elementos mágicos (los que desbloquea el jugador y cuenta la Maestría).
+// Orden canónico de desbloqueo: clase → evolución → pisos 10/25/50 de la Torre.
+export const MAGIC_ELEMENTS: Element[] = ["fuego", "hielo", "electrico", "sagrado", "sombra"];
+
+export function magicElementsOwned(elements: string[] | undefined): number {
+  return MAGIC_ELEMENTS.filter((e) => (elements ?? []).includes(e)).length;
+}
+
+// Próximo elemento mágico a desbloquear en orden canónico (undefined si ya están todos).
+export function nextMagicElement(elements: string[] | undefined): Element | undefined {
+  return MAGIC_ELEMENTS.find((e) => !(elements ?? []).includes(e));
+}
+
+export function hasAllMagicElements(elements: string[] | undefined): boolean {
+  return magicElementsOwned(elements) === MAGIC_ELEMENTS.length;
+}
 
 // Debilidad = x1.6 · resistencia = x0.6. La debilidad se revela al golpear.
 export const RACE_WEAKNESS: Record<Race, Element> = {
@@ -266,7 +283,10 @@ export function combatStats(p: PlayerState): CombatStats {
   let maxMp = 25 + s.intelligence * 1.5 + level * 4;
   let atk = 10 + s.strength * 1.5 + level * 3 + (weapon?.bonus?.dmg ?? 0);
   let def = 5 + s.vitality * 0.5 + level * 2 + (armor?.bonus?.def ?? 0);
-  let crit = 0.05 + p.coins * 0.002 + (trinket?.bonus?.crit ?? 0);
+  // Crítico base + boost por oro CAPEADO (máx +15%: acaparar deja de rendir) +
+  // +0,5%/nivel (mantener nivel alto importa) + reliquia.
+  const goldCrit = Math.min(0.15, p.coins * 0.002);
+  let crit = 0.05 + goldCrit + level * 0.005 + (trinket?.bonus?.crit ?? 0);
   const magic = s.intelligence * 0.5;
 
   let agility = (p.agility ?? 45) + level + (boots?.bonus?.agi ?? 0);
@@ -305,7 +325,7 @@ export function combatStats(p: PlayerState): CombatStats {
 }
 
 // Curas fuera del combate.
-export const RANK_HP: Record<QuestDifficulty, number> = { F: 10, E: 15, D: 20, C: 25, B: 30 };
+export const RANK_HP: Record<QuestDifficulty, number> = { F: 10, E: 15, D: 20, C: 25, B: 30, S: 35 };
 
 export function healFromQuest(player: PlayerState, difficulty: QuestDifficulty): PlayerState {
   const { maxHp } = combatStats(player);
@@ -355,6 +375,10 @@ export const GRIND_MONSTERS: Record<QuestDifficulty, Enemy[]> = {
   B: [
     { id: "b-jefe", name: "Jefe de Dungeon", race: "demonio", attackElement: "fuego", icon: "👹", hp: 90, atk: 26, def: 9, coinsMin: 80, coinsMax: 130, exXp: 12, dropChance: 0.35 },
     { id: "b-reina", name: "Reina Sombría", race: "no-muerto", attackElement: "sombra", icon: "👑", hp: 96, atk: 25, def: 8, coinsMin: 90, coinsMax: 140, exXp: 12, dropChance: 0.38 },
+  ],
+  S: [
+    { id: "s-dragon", name: "Dragón Ancestral", race: "bestia", attackElement: "fuego", icon: "🐉", hp: 120, atk: 32, def: 10, coinsMin: 140, coinsMax: 200, exXp: 18, dropChance: 0.45 },
+    { id: "s-lich", name: "Liche del Sistema", race: "no-muerto", attackElement: "sombra", icon: "💀", hp: 110, atk: 30, def: 11, coinsMin: 130, coinsMax: 190, exXp: 18, dropChance: 0.42 },
   ],
 };
 
@@ -438,6 +462,7 @@ export interface Member {
   exLevel: number;
   elements: string[];
   raidSkill: number;
+  weakPct?: number;
   nextAtkMult?: number;
   nextCrit?: boolean;
   ignoreDefPct?: number;
@@ -499,7 +524,7 @@ export type BattleAction =
   | { type: "attack"; target: string }
   | { type: "spell"; spellId: string; target: string }
   | { type: "defend" }
-  | { type: "item"; itemId: string }
+  | { type: "item"; itemId: string; target?: string }
   | { type: "ex"; target: string }
   | { type: "rs"; target: string }
   | { type: "flee" };
@@ -531,6 +556,7 @@ export function buildParty(player: PlayerState, bots: Array<{ name: string; cls:
       exLevel: player.battle.exLevel,
       elements: player.elements ?? [],
       raidSkill: player.raidSkillLevel ?? 1,
+      weakPct: itemById(player.title)?.bonus?.weakPct ?? 0,
     },
   ];
   for (const b of bots) {
@@ -785,6 +811,8 @@ function hitEnemy(s: BattleState, attacker: Member, enemy: EnemyState, element: 
   // Tiro de Sombra (cazador): ignora 50% de defensa física.
   const defReduction = element === "fisico" ? enemy.def * (attacker.ignoreDefPct ? 1 - attacker.ignoreDefPct : 1) : 0;
   let dmg = (baseDmg - defReduction) * mult;
+  // Maestría de Elementos: +15% de daño elemental al golpear la debilidad.
+  if (weak) dmg *= 1 + (attacker.weakPct ?? 0);
   // Filo del Monarca (guerrero): +50% (+10%/nivel) en el próximo golpe.
   if (attacker.nextAtkMult) dmg *= attacker.nextAtkMult;
   // Pasiva de Raid Skill (guerrero): +4% de daño vs jefes por nivel.
@@ -805,10 +833,32 @@ function hitEnemy(s: BattleState, attacker: Member, enemy: EnemyState, element: 
   return { weak, crit };
 }
 
-function useItem(s: BattleState, p: Member, itemId: string): void {
+function useItem(s: BattleState, p: Member, itemId: string, targetId?: string): void {
   const item = itemById(itemId);
-  if (!item || item.kind !== "potion") return;
+  if (!item) return;
   s.usedItems.push(item.id);
+
+  if (item.kind === "gem") {
+    // Gema de elemento: daño fijo (ignora defensa física), revela la debilidad al golpear.
+    const target = livingEnemies(s).find((e) => e.id === targetId) ?? livingEnemies(s)[0];
+    const el = (item.element as Element) ?? "fisico";
+    const dmg = item.bonus?.dmg ?? 25;
+    if (target) hitEnemy(s, p, target, el, dmg);
+    pushLog(s, "player", `${p.name} lanzó ${item.name} (${ELEMENT_ICON[el]} ${dmg} de daño) a ${target?.name ?? "…"}`);
+    return;
+  }
+
+  if (item.kind === "lens") {
+    // Lente del Sistema: revela la debilidad de todos los enemigos por esta batalla.
+    for (const e of livingEnemies(s)) {
+      const weak = RACE_WEAKNESS[e.race];
+      if (!e.revealed.includes(weak)) e.revealed.push(weak);
+    }
+    pushLog(s, "system", `👁 ${p.name} usó ${item.name}: debilidades reveladas esta batalla.`);
+    return;
+  }
+
+  if (item.kind !== "potion") return;
   const b = item.bonus ?? {};
   const parts: string[] = [];
   if (b.hpPct || b.hp) {
@@ -939,7 +989,7 @@ function playerTurn(s: BattleState, action: BattleAction): { weakness: boolean }
       break;
     }
     case "item": {
-      useItem(s, p, action.itemId);
+      useItem(s, p, action.itemId, action.target);
       break;
     }
     case "ex": {
