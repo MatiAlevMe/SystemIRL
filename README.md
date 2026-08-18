@@ -9,7 +9,7 @@
 
 https://github.com/user-attachments/assets/23f62132-5be8-4b20-97c9-f4e850367226
 
-Proyecto para **The Realtime Hackathon by Portal** (7–9 ago 2026). Desarrollo individual por **nightstar73**.
+Proyecto para **The Realtime Hackathon by Portal** (7–9 agosto 2026). Desarrollo individual por **nightstar73**.
 
 ---
 
