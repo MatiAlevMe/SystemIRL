@@ -147,4 +147,5 @@ ZEN_API_KEY=...               # (opcional) OpenCode Zen free (big-pickle, deepse
 
 - Repo: https://github.com/MatiAlevMe/SystemIRL
 - Live: https://system-irl.vercel.app
+- https://youtu.be/abEFfYC2CoM
 - Hackathon: [The Realtime Hackathon by Portal](https://hack.useportal.co)
