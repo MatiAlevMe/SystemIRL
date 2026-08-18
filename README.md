@@ -156,7 +156,7 @@ ZEN_API_KEY=...               # (opcional) OpenCode Zen free (big-pickle, deepse
 ## 🔗 Enlaces de interés
 
 - 🚀 Deploy: https://system-irl.vercel.app
-- 🎬 Demo: https://youtu.be/abEFfYC2CoM
+- 🎬 Demo: https://youtu.be/qHgmIaeDRqk
 - 🌐 The Realtime Hackathon by Portal (2026): https://hack.useportal.co
 
 ---
