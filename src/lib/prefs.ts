@@ -27,3 +27,14 @@ export const MIN_PREF_TAGS = 2;
 export function tagLabel(id: string): string {
   return QUEST_TAGS.find((t) => t.id === id)?.label ?? id;
 }
+
+// Categorías de interés derivadas de los tags elegidos. Se mandan al server
+// para sesgar el rank hacia arriba SIN limitar la cobertura de categorías.
+export function categoriesForTags(tags: string[]): QuestCategory[] {
+  const cats = new Set<QuestCategory>();
+  for (const t of tags) {
+    const c = QUEST_TAGS.find((x) => x.id === t)?.category;
+    if (c) cats.add(c);
+  }
+  return [...cats];
+}

@@ -46,7 +46,7 @@ export const CLASS_BALANCE: Record<PlayerClass, ClassStats> = {
     baseMp: 20,
     baseAtk: 10,
     baseDef: 16,
-    defaultElement: "físico",
+    defaultElement: "sombra",
   },
 };
 

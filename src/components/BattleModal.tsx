@@ -34,6 +34,8 @@ const MODE_LABEL: Record<BattleState["mode"], string> = {
 };
 
 const POTION_IDS = ["p-pocion", "p-eter", "p-ex-menor", "p-elixir", "p-mayor", "p-ex-mayor", "p-ex-superior"];
+const GEM_IDS = ["g-fuego", "g-hielo", "g-electrico", "g-sagrado", "g-sombra"];
+const LENS_ID = "item-lente";
 
 export default function BattleModal({ battle, player, result, onAction, onClose, revealWeakness }: Props) {
   const logRef = useRef<HTMLDivElement>(null);
@@ -47,6 +49,11 @@ export default function BattleModal({ battle, player, result, onAction, onClose,
   const potions = POTION_IDS.map((id) => ({ id, item: itemById(id), count: player.inventory[id] ?? 0 })).filter(
     (p) => p.item && p.count > 0,
   );
+  const gems = GEM_IDS.map((id) => ({ id, item: itemById(id), count: player.inventory[id] ?? 0 })).filter(
+    (g) => g.item && g.count > 0,
+  );
+  const lensItem = itemById(LENS_ID);
+  const lensCount = player.inventory[LENS_ID] ?? 0;
   const targetId = battle.enemies.some((e) => e.id === selectedId && e.hp > 0) ? selectedId : (enemies[0]?.id ?? "");
 
   useEffect(() => {
@@ -252,19 +259,41 @@ export default function BattleModal({ battle, player, result, onAction, onClose,
               <div className="sub-row">
                 <span className="sub-label">Ítems</span>
                 <div className="sub-items">
-                  {potions.length === 0 ? (
-                    <span className="sub-empty">Sin pociones. Comprá en el shop.</span>
+                  {potions.length === 0 && gems.length === 0 && lensCount === 0 ? (
+                    <span className="sub-empty">Sin ítems. Comprá en el shop.</span>
                   ) : (
-                    potions.map((p) => (
-                      <button
-                        key={p.id}
-                        className="battle-act small"
-                        title={p.item?.desc}
-                        onClick={() => act({ type: "item", itemId: p.id! })}
-                      >
-                        🧪 {p.item?.name} ×{p.count}
-                      </button>
-                    ))
+                    <>
+                      {potions.map((p) => (
+                        <button
+                          key={p.id}
+                          className="battle-act small"
+                          title={p.item?.desc}
+                          onClick={() => act({ type: "item", itemId: p.id! })}
+                        >
+                          🧪 {p.item?.name} ×{p.count}
+                        </button>
+                      ))}
+                      {gems.map((g) => (
+                        <button
+                          key={g.id}
+                          className="battle-act small"
+                          disabled={!targetId}
+                          title={g.item?.desc}
+                          onClick={() => act({ type: "item", itemId: g.id!, target: targetId })}
+                        >
+                          {ELEMENT_ICON[(g.item?.element ?? "fuego") as keyof typeof ELEMENT_ICON]} {g.item?.name} ×{g.count}
+                        </button>
+                      ))}
+                      {lensCount > 0 && lensItem && (
+                        <button
+                          className="battle-act small"
+                          title={lensItem.desc}
+                          onClick={() => act({ type: "item", itemId: LENS_ID })}
+                        >
+                          👁 {lensItem.name} ×{lensCount}
+                        </button>
+                      )}
+                    </>
                   )}
                 </div>
               </div>

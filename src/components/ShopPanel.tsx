@@ -50,8 +50,8 @@ function ItemCard({
 }) {
   const owned = player.owned.includes(item.id) || (item.kind === "music" && player.music);
   const count = player.inventory[item.id] ?? 0;
-  const isUnlock = item.kind === "gem" || item.kind === "lens";
-  const equipped = isUnlock ? owned : equippedId(player, item.kind) === item.id;
+  const isConsumable = item.kind === "potion" || item.kind === "gem" || item.kind === "lens";
+  const equipped = isConsumable ? false : equippedId(player, item.kind) === item.id;
   const affordable = player.coins >= item.price;
 
   return (
@@ -80,7 +80,7 @@ function ItemCard({
       )}
       <div className="shop-item-bottom">
         <span className="shop-item-price">💰 {item.price}</span>
-        {item.kind === "potion" ? (
+        {isConsumable ? (
           count > 0 ? (
             <span className="shop-btn equipped">×{count}</span>
           ) : (
@@ -95,9 +95,7 @@ function ItemCard({
             {affordable ? "Comprar" : "Sin oro"}
           </button>
         ) : equipped ? (
-          <span className="shop-btn equipped">
-            ✓ {item.kind === "gem" ? "Desbloqueada" : item.kind === "lens" ? "Adquirida" : "Equipado"}
-          </span>
+          <span className="shop-btn equipped">✓ Equipado</span>
         ) : (
           <button className="shop-btn equip" onClick={() => onEquip(item)}>
             Equipar
@@ -121,9 +119,9 @@ export default function ShopPanel({ player, onBuy, onEquip, onChangeClass }: Pro
     { label: "Reliquias", items: TRINKETS },
     { label: "Botas", items: BOOTS_ITEMS },
     { label: "Pociones", items: POTIONS },
-    { label: "Gemas (elementos)", items: GEM_ITEMS },
+    { label: "Gemas (combate)", items: GEM_ITEMS },
     { label: "Música", items: MUSIC_ITEMS },
-    { label: "Utilidades", items: [LENS_ITEM] },
+    { label: "Lente", items: [LENS_ITEM] },
     { label: "Auras de raid", items: RAID_AURAS },
   ];
 
@@ -191,7 +189,7 @@ export default function ShopPanel({ player, onBuy, onEquip, onChangeClass }: Pro
         <div className="shop-section" key={s.label}>
           <h3>{s.label}</h3>
           <div className="shop-grid">
-            {s.items.map((item) => (
+            {s.items.filter((i) => !i.hidden).map((item) => (
               <ItemCard key={item.id} item={item} player={player} onBuy={onBuy} onEquip={onEquip} />
             ))}
           </div>

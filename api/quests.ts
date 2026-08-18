@@ -1,17 +1,21 @@
 // SystemIRL — quest generator (Vercel Serverless Function)
 // POST /api/quests
 // Body: { history: string[], playerLevel: number, streak: number, count?: number,
-//         tags?: string[], rankBias?: number, forceRank?: "F"|"E"|"D"|"C"|"B" }
+//         tags?: string[], interestCategories?: QuestCategory[], rankBias?: number,
+//         forceRank?: "F"|"E"|"D"|"C"|"B"|"S" }
 // Returns personalized daily quests from the first AI provider with a key
 // (Gemini, Kilo Gateway or OpenCode Zen; QUEST_PROVIDER can force one), falling
 // back to a canned pool so the app always works.
+//
+// Los intereses son una PREFERENCIA (no lock): todas las categorías aparecen;
+// las categorías de interés suben la probabilidad de rank alto (C/B/S).
 
 // Named HTTP export = Vercel Web API signature. The previous `export default`
 // handler returned a Response that Vercel ignored, so the function hung.
 export const maxDuration = 30;
 
 export type QuestCategory = "strength" | "intelligence" | "vitality" | "gold";
-export type QuestDifficulty = "F" | "E" | "D" | "C" | "B";
+export type QuestDifficulty = "F" | "E" | "D" | "C" | "B" | "S";
 
 export interface Quest {
   id: string;
@@ -28,6 +32,8 @@ interface QuestsBody {
   streak?: number;
   count?: number;
   tags?: string[];
+  /** Categorías de interés (derivadas de los tags). Preferencia, no lock: suben la probabilidad de rank alto. */
+  interestCategories?: QuestCategory[];
   rankBias?: number;
   forceRank?: QuestDifficulty;
 }
@@ -47,6 +53,9 @@ export async function POST(request: Request): Promise<Response> {
   const tags = Array.isArray(body.tags)
     ? body.tags.filter((t): t is string => typeof t === "string").slice(0, 6)
     : [];
+  const interestCategories = Array.isArray(body.interestCategories)
+    ? body.interestCategories.filter((c): c is QuestCategory => CATEGORIES.includes(c as QuestCategory)).slice(0, 4)
+    : [];
   const rankBias = Math.max(-2, Math.min(3, Math.round(Number(body.rankBias) || 0)));
   const forceRank = DIFFICULTIES.includes(body.forceRank as QuestDifficulty)
     ? (body.forceRank as QuestDifficulty)
@@ -54,7 +63,7 @@ export async function POST(request: Request): Promise<Response> {
 
   const rank = rankRange(rankBias);
   for (const source of providerOrder()) {
-    const quests = await trySource(source, { history, playerLevel, streak, count, tags, rank, forceRank });
+    const quests = await trySource(source, { history, playerLevel, streak, count, tags, interestCategories, rank, forceRank });
     if (quests && quests.length > 0) {
       return json({ source, quests });
     }
@@ -62,7 +71,7 @@ export async function POST(request: Request): Promise<Response> {
 
   return json({
     source: "fallback",
-    quests: fallbackQuests({ playerLevel, streak, count, rank, forceRank }),
+    quests: fallbackQuests({ playerLevel, streak, count, tags, interestCategories, rank, forceRank }),
   });
 }
 
@@ -82,6 +91,7 @@ interface QuestOpts {
   streak: number;
   count: number;
   tags: string[];
+  interestCategories: QuestCategory[];
   rank: [QuestDifficulty, QuestDifficulty];
   forceRank?: QuestDifficulty;
 }
@@ -238,17 +248,17 @@ async function callOpenAICompatible(
 const SYSTEM_INSTRUCTION = "Eres El Sistema. Siempre respondes JSON válido, sin markdown.";
 
 function buildPrompt(opts: QuestOpts): string {
-  const { history, playerLevel, streak, count, tags, rank, forceRank } = opts;
+  const { history, playerLevel, streak, count, tags, interestCategories, rank, forceRank } = opts;
   const recent = history.slice(-15).map((h) => `- ${h}`).join("\n") || "- (nuevo jugador)";
   const interests =
     tags.length > 0
-      ? `Intereses del jugador (prioriza quests alineadas con estos tags):\n${tags.map((t) => `- ${t}`).join("\n")}`
-      : "Intereses: sin preferencias marcadas, usa variedad.";
+      ? `Intereses del jugador (PREFERENCIA, no restricción — no limitarse a ellos):\n${tags.map((t) => `- ${t}`).join("\n")}\nCategorías de interés: ${interestCategories.join(", ")}. Las quests que toquen estas categorías tienen más chance de rank alto (C/B/S).`
+      : "Intereses: sin preferencias marcadas. Cobertura variada y pareja.";
   const rankRule = forceRank
     ? `Genera todas las quests con dificultad EXACTA ${forceRank}.`
-    : rank[0] === "F" && rank[1] === "B"
+    : rank[0] === "F" && rank[1] === "S"
       ? ""
-      : `Las quests deben tener dificultad entre ${rank[0]} y ${rank[1]} (rango ${rank[0] === "D" ? "endurecido" : "suavizado"}).`;
+      : `Las quests deben tener dificultad entre ${rank[0]} y ${rank[1]} (rango ${rank[0] === "D" ? "endurecido" : rank[1] === "S" ? "ambicioso" : "suavizado"}).`;
 
   return [
     `Eres "El Sistema", el agente que asigna quests a un jugador para mejorar su vida real.`,
@@ -259,12 +269,17 @@ function buildPrompt(opts: QuestOpts): string {
     `Genera exactamente ${count} quests diarias NUEVAS para hoy (no repitas las del historial),`,
     `adaptadas al nivel del jugador (más difíciles/mayor XP si es nivel alto).`,
     rankRule,
+    `COBERTURA: repartí variedad en TODAS las categorías (strength/intelligence/vitality/gold);`,
+    `no repitas una categoría más de 2 veces. Si el historial muestra una categoría descuidada, priorizala.`,
+    `RANKING: F = trivial · E = fácil · D = normal · C = difícil · B = intenso · S = excepcional.`,
+    `Asigná el rank según cuánto esfuerzo real pide la quest: si toca un interés del jugador podés subirlo a C/B/S;`,
+    `si no toca ningún interés, quedate en F/D/C. Máximo 1 quest rank S por día, solo si lo amerita.`,
     `Cada quest debe ser concreta, accionable y realista (fitness, hábitos, finanzas, lectura, enfoque).`,
     `GUARDRAIL: NUNCA sugieras acciones peligrosas, ilegales, autodestructivas ni que pongan en riesgo`,
     `la salud física o mental. Si un interés del jugador entra en conflicto, deriva hacia algo seguro y constructivo.`,
     `Responde SOLO con JSON:`,
-    `{"quests":[{"title":"...","description":"...","category":"strength|intelligence|vitality|gold","difficulty":"F|E|D|C|B","xp":25}]}`,
-    `- xp entre 25 y 80, coherente con difficulty y nivel.`,
+    `{"quests":[{"title":"...","description":"...","category":"strength|intelligence|vitality|gold","difficulty":"F|E|D|C|B|S","xp":45}]}`,
+    `- xp según rank: F 20-30 · E 30-45 · D 45-60 · C 60-75 · B 75-90 · S 90-110.`,
     `- description: instrucción breve de qué hacer (máx 1 frase).`,
   ].join("\n");
 }
@@ -296,15 +311,15 @@ function extractJson(text: string): { quests?: unknown } | null {
 }
 
 const CATEGORIES: QuestCategory[] = ["strength", "intelligence", "vitality", "gold"];
-const DIFFICULTIES: QuestDifficulty[] = ["F", "E", "D", "C", "B"];
+const DIFFICULTIES: QuestDifficulty[] = ["F", "E", "D", "C", "B", "S"];
 
 // Rango de dificultades según rankBias (preferencias del jugador).
-// -1 "bajar rango": F..D · 0 normal: F..B · +1 (reliquia de ambición): E..B · ≥2: D..B
+// -1 "bajar rango": F..C · 0 normal: F..S · +1 (reliquia de ambición): E..S · ≥2: D..S
 function rankRange(bias: number): [QuestDifficulty, QuestDifficulty] {
-  if (bias <= -1) return ["F", "D"];
-  if (bias === 1) return ["E", "B"];
-  if (bias >= 2) return ["D", "B"];
-  return ["F", "B"];
+  if (bias <= -1) return ["F", "C"];
+  if (bias === 1) return ["E", "S"];
+  if (bias >= 2) return ["D", "S"];
+  return ["F", "S"];
 }
 
 function clampRank(d: QuestDifficulty, lo: QuestDifficulty, hi: QuestDifficulty): QuestDifficulty {
@@ -329,7 +344,7 @@ function sanitizeQuest(
     : "E";
   if (opts.forceRank) difficulty = opts.forceRank;
   else difficulty = clampRank(difficulty, opts.rank[0], opts.rank[1]);
-  const xp = Math.max(20, Math.min(100, Number(q.xp) || 40));
+  const xp = Math.max(20, Math.min(110, Number(q.xp) || 40));
   return { id: `q-${Date.now().toString(36)}-${i}`, title, description, category, difficulty, xp };
 }
 
@@ -359,6 +374,10 @@ const POOL: PoolQuest[] = [
   { title: "Prepárate la comida del día", description: "Cocina tu almuerzo y cena en casa.", category: "gold", difficulty: "E", xp: 45 },
   { title: "5 km de caminata rápida", description: "Paso ligero, 5 km. Activo pero sin exigirte.", category: "vitality", difficulty: "E", xp: 30 },
   { title: "Revisa tu presupuesto 15 min", description: "15 minutos con tus finanzas. Sin excusas.", category: "gold", difficulty: "F", xp: 25 },
+  { title: "CrossFit + movilidad (90 min)", description: "Rutina de élite: fuerza, cardio y movilidad.", category: "strength", difficulty: "S", xp: 100 },
+  { title: "Ayuno 16h + 8h de sueño", description: "Ayuno intermitente de 16h y dormí 8h esta noche.", category: "vitality", difficulty: "S", xp: 95 },
+  { title: "3h de estudio profundo", description: "Pomodoro estricto, 3 horas sin interrupciones.", category: "intelligence", difficulty: "S", xp: 100 },
+  { title: "Rediseña tu presupuesto mensual", description: "Presupuesto del mes desde cero y auditoría de gastos.", category: "gold", difficulty: "S", xp: 95 },
 ];
 
 function shuffle<T>(arr: T[]): T[] {
@@ -370,33 +389,62 @@ function shuffle<T>(arr: T[]): T[] {
   return a;
 }
 
+// Fallback offline: cobertura de TODAS las categorías (orden aleatorio) con
+// sesgo de rank por interés (preferencia, no lock). El rank S entra por interés.
 function fallbackQuests(opts: {
   playerLevel: number;
   streak: number;
   count: number;
+  tags: string[];
+  interestCategories: QuestCategory[];
   rank: [QuestDifficulty, QuestDifficulty];
   forceRank?: QuestDifficulty;
 }): Quest[] {
   const boost = opts.playerLevel >= 4 ? 1.2 : 1;
-  const pool =
-    opts.forceRank || opts.rank[0] !== "F" || opts.rank[1] !== "B"
-      ? POOL.filter((p) => (opts.forceRank ? p.difficulty === opts.forceRank : rankInRange(p.difficulty, opts.rank)))
-      : POOL;
-  const base = shuffle(pool.length > 0 ? pool : POOL);
-  const source = Array.from({ length: opts.count }, (_, i) => base[i % base.length]);
-  return source.map((p, i) => ({
-    id: `q-fb-${Date.now().toString(36)}-${i}`,
-    title: p.title,
-    description: p.description,
-    category: p.category,
-    difficulty: opts.forceRank ? opts.forceRank : p.difficulty,
-    xp: Math.round((p.xp * boost) / 5) * 5,
-  }));
+  const byCategory: Record<QuestCategory, PoolQuest[]> = {
+    strength: POOL.filter((p) => p.category === "strength"),
+    intelligence: POOL.filter((p) => p.category === "intelligence"),
+    vitality: POOL.filter((p) => p.category === "vitality"),
+    gold: POOL.filter((p) => p.category === "gold"),
+  };
+  // Las 4 categorías entran (en orden aleatorio) y los huecos extra se sortean.
+  const order = shuffle([...CATEGORIES]);
+  const cats: QuestCategory[] = [];
+  for (let i = 0; i < opts.count; i++) {
+    cats.push(i < CATEGORIES.length ? order[i] : CATEGORIES[Math.floor(Math.random() * CATEGORIES.length)]);
+  }
+  const interests = new Set(opts.interestCategories);
+  const out: Quest[] = [];
+  for (let i = 0; i < opts.count; i++) {
+    const pool = byCategory[cats[i]];
+    if (!pool || pool.length === 0) continue;
+    const p = pool[Math.floor(Math.random() * pool.length)];
+    const difficulty = opts.forceRank
+      ? opts.forceRank
+      : clampRank(rollRank(interests.has(cats[i])), opts.rank[0], opts.rank[1]);
+    out.push({
+      id: `q-fb-${Date.now().toString(36)}-${i}`,
+      title: p.title,
+      description: p.description,
+      category: p.category,
+      difficulty,
+      xp: Math.round((xpForDifficulty(difficulty) * boost) / 5) * 5,
+    });
+  }
+  return out;
 }
 
-function rankInRange(d: QuestDifficulty, rank: [QuestDifficulty, QuestDifficulty]): boolean {
-  const i = DIFFICULTIES.indexOf(d);
-  const min = DIFFICULTIES.indexOf(rank[0]);
-  const max = DIFFICULTIES.indexOf(rank[1]);
-  return i >= min && i <= max;
+// Probabilidades de rank: categoría de interés tiende a C/B/S; las demás a F/D/C.
+const INTEREST_RANKS: QuestDifficulty[] = ["D", "C", "C", "B", "B", "S"];
+const NEUTRAL_RANKS: QuestDifficulty[] = ["F", "F", "E", "E", "D", "C"];
+
+function rollRank(isInterest: boolean): QuestDifficulty {
+  const pool = isInterest ? INTEREST_RANKS : NEUTRAL_RANKS;
+  return pool[Math.floor(Math.random() * pool.length)];
+}
+
+const XP_BY_DIFFICULTY: Record<QuestDifficulty, number> = { F: 30, E: 40, D: 55, C: 70, B: 85, S: 100 };
+
+function xpForDifficulty(d: QuestDifficulty): number {
+  return XP_BY_DIFFICULTY[d];
 }

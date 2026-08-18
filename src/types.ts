@@ -1,5 +1,5 @@
 export type QuestCategory = "strength" | "intelligence" | "vitality" | "gold";
-export type QuestDifficulty = "F" | "E" | "D" | "C" | "B";
+export type QuestDifficulty = "F" | "E" | "D" | "C" | "B" | "S";
 export type PlayerClass = "guerrero" | "guardia" | "sabio" | "cazador";
 
 export interface Quest {
@@ -38,6 +38,7 @@ export interface PlayerState {
   raidSkillLevel?: number;
   raidKills?: number;
   elements?: string[];
+  duelWins?: number;
 }
 
 export interface PartyMessage {
