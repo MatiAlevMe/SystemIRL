@@ -7,7 +7,7 @@
 [![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?style=for-the-badge&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![Portal](https://img.shields.io/badge/Portal-3DDAD7?style=for-the-badge&logo=websocket&logoColor=black)](https://useportal.co)
 
-https://github.com/user-attachments/assets/f93a3006-8cf3-4876-bfba-60d9966d43be
+https://github.com/user-attachments/assets/23f62132-5be8-4b20-97c9-f4e850367226
 
 Proyecto para **The Realtime Hackathon by Portal** (7–9 ago 2026). Equipo **Ragnarok**.
 
