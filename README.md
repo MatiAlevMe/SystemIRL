@@ -7,6 +7,8 @@
 [![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?style=for-the-badge&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![Portal](https://img.shields.io/badge/Portal-3DDAD7?style=for-the-badge&logo=websocket&logoColor=black)](https://useportal.co)
 
+https://github.com/user-attachments/assets/f93a3006-8cf3-4876-bfba-60d9966d43be
+
 Proyecto para **The Realtime Hackathon by Portal** (7–9 ago 2026). Equipo **Ragnarok**.
 
 ---
@@ -143,9 +145,8 @@ ZEN_API_KEY=...               # (opcional) OpenCode Zen free (big-pickle, deepse
 - **Pitch (280):** *"Tu vida real convertida en RPG: un agente de IA te asigna quests diarias de entrenamiento y hábitos. Completá misiones, derrotá monstruos, subí de nivel y tu party lo celebra en vivo con Portal. IA + tiempo real, sin infraestructura."*
 - **Demo (1:30):** [enlace] — ver guion en [`docs/DEMO.md`](docs/DEMO.md)
 
-## 🔗 Enlaces
+## 🔗 Enlaces de interés
 
-- Repo: https://github.com/MatiAlevMe/SystemIRL
-- Live: https://system-irl.vercel.app
-- https://youtu.be/abEFfYC2CoM
-- Hackathon: [The Realtime Hackathon by Portal](https://hack.useportal.co)
+- 🚀 Deploy: https://system-irl.vercel.app
+- 🎬 Demo: https://youtu.be/abEFfYC2CoM
+- 🌐 The Realtime Hackathon by Portal (2026): https://hack.useportal.co
