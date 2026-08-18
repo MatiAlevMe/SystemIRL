@@ -61,6 +61,8 @@ flujo realtime (sin backend propio):
 
 > **God mode (demo)**: con `#demo` al final de la URL se activa un panel de demo con bots de party (clientes de Portal propios, con presencia real), **autopilot** de quests, +XP, level-up forzado, oro, control de la Torre, **forzar rango**, **revelar debilidades** en combate y toggles de IA. Ideal para grabar el video sin depender de otra persona.
 
+---
+
 ## 🛠️ Stack
 
 | Capa | Tecnología |
@@ -71,6 +73,8 @@ flujo realtime (sin backend propio):
 | RPG | Combate + loot + shop + La Torre (client-side, sin assets) |
 | Persistencia | IndexedDB (`idb-keyval`) — perfil, XP, quests del día, items, torre |
 | Deploy | Vercel (SPA + serverless functions `api/*.ts`) |
+
+---
 
 ## ⚙️ Setup local
 
@@ -120,7 +124,7 @@ ZEN_API_KEY=...               # (opcional) OpenCode Zen free (big-pickle, deepse
    npm run portal:deploy   # npx @portalsdk/cli deploy
    ```
 
-**URL live:** https://system-irl.vercel.app
+---
 
 ## 📁 Estructura
 
@@ -140,13 +144,25 @@ ZEN_API_KEY=...               # (opcional) OpenCode Zen free (big-pickle, deepse
     └── DEMO.md           # guion del video de la demo
 ```
 
+---
+
 ## 📋 Entregables
 
 - **Pitch (280):** *"Tu vida real convertida en RPG: un agente de IA te asigna quests diarias de entrenamiento y hábitos. Completá misiones, derrotá monstruos, subí de nivel y tu party lo celebra en vivo con Portal. IA + tiempo real, sin infraestructura."*
 - **Demo (1:30):** [enlace] — ver guion en [`docs/DEMO.md`](docs/DEMO.md)
+
+---
 
 ## 🔗 Enlaces de interés
 
 - 🚀 Deploy: https://system-irl.vercel.app
 - 🎬 Demo: https://youtu.be/abEFfYC2CoM
 - 🌐 The Realtime Hackathon by Portal (2026): https://hack.useportal.co
+
+---
+
+## Licencia
+
+Este proyecto está bajo la **GNU Affero General Public License v3.0 (AGPL-3.0)**.
+
+Para más información o consultas, contacta con el desarrollador en alevropulos@gmail.com
